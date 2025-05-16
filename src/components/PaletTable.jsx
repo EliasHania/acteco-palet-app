@@ -55,43 +55,80 @@ const PaletTable = ({
   };
 
   const exportarExcel = () => {
-    const workbook = XLSX.utils.book_new();
+    const titulo =
+      "Resumen del turno de " +
+      encargada.charAt(0).toUpperCase() +
+      encargada.slice(1);
 
-    const sheetData = [
-      [
-        `Resumen del turno de ${
-          encargada.charAt(0).toUpperCase() + encargada.slice(1)
-        }`,
-      ],
-      [],
+    const paletsOrdenados = [...palets].sort(
+      (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+    );
+
+    const encabezado = [
       ["Trabajadora", "Código QR", "Tipo", "Hora"],
-    ];
-
-    const resumen = {};
-    palets.forEach((p) => {
-      sheetData.push([
+      ...paletsOrdenados.map((p) => [
         p.trabajadora,
         p.codigo,
         p.tipo,
         formatearHora(p.timestamp),
-      ]);
-      resumen[p.trabajadora] = (resumen[p.trabajadora] || 0) + 1;
+      ]),
+    ];
+
+    // ➤ Resumen por trabajadora con tipos de palets
+    const resumenPorTrabajadora = {};
+    paletsOrdenados.forEach((p) => {
+      if (!resumenPorTrabajadora[p.trabajadora]) {
+        resumenPorTrabajadora[p.trabajadora] = {};
+      }
+      resumenPorTrabajadora[p.trabajadora][p.tipo] =
+        (resumenPorTrabajadora[p.trabajadora][p.tipo] || 0) + 1;
     });
 
-    sheetData.push([], ["Resumen por trabajadora:"]);
-    Object.entries(resumen)
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .forEach(([trabajadora, count]) => {
-        sheetData.push([trabajadora, count]);
-      });
+    // ➤ Resumen total por tipo en orden específico
+    const tiposOrden = [
+      "46x28",
+      "40x28",
+      "46x11",
+      "40x11",
+      "38x11",
+      "32x11",
+      "26x11",
+    ];
+    const resumenPorTipo = {};
+    paletsOrdenados.forEach((p) => {
+      resumenPorTipo[p.tipo] = (resumenPorTipo[p.tipo] || 0) + 1;
+    });
 
-    sheetData.push([], ["Total Palets:", palets.length]);
+    // ➤ Preparar datos para Excel
+    const sheetData = [
+      [titulo],
+      [],
+      ...encabezado,
+      [],
+      ["Resumen por trabajadora:"],
+    ];
+    Object.entries(resumenPorTrabajadora).forEach(([trabajadora, tipos]) => {
+      const resumen = Object.entries(tipos)
+        .map(
+          ([tipo, count]) => `${count} palet${count > 1 ? "s" : ""} de ${tipo}`
+        )
+        .join(", ");
+      sheetData.push([trabajadora + ":", resumen]);
+    });
+
+    sheetData.push([], ["Resumen por tipo de palet:"]);
+    tiposOrden.forEach((tipo) => {
+      const count = resumenPorTipo[tipo] || 0;
+      sheetData.push([`Total palets de ${tipo}:`, count]);
+    });
+
+    sheetData.push([], ["Total palets registrados:", palets.length]);
 
     const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
-
     worksheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }];
-    worksheet["!cols"] = [{ wch: 20 }, { wch: 20 }, { wch: 12 }, { wch: 12 }];
+    worksheet["!cols"] = [{ wch: 20 }, { wch: 25 }, { wch: 12 }, { wch: 12 }];
 
+    const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Palets");
 
     const fecha = new Date().toLocaleDateString().replace(/\//g, "-");
