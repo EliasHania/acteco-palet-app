@@ -24,12 +24,15 @@ const PaletTable = ({
       const token =
         localStorage.getItem("token") || sessionStorage.getItem("token");
 
-      const res = await fetch(`http://localhost:4000/api/palets/${id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const res = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/palets/${id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       if (!res.ok) throw new Error("Error al eliminar palet");
       await refrescarPalets();
@@ -147,8 +150,8 @@ const PaletTable = ({
             >
               <div className="w-full h-full">
                 <div className="font-semibold text-gray-800 text-base">
-                  {nombre} – {lista.length} palet{lista.length > 1 ? "s" : ""}{" "}
-                  registrados
+                  {nombre} – {lista.length} palet
+                  {lista.length > 1 ? "s" : ""} registrados
                 </div>
                 {abiertos[nombre] && (
                   <ul className="mt-3 space-y-2 text-sm text-gray-700">
