@@ -43,6 +43,11 @@ mongoose
   .then(() => console.log("✅ Conectado a MongoDB Atlas"))
   .catch((err) => console.error("❌ Error en MongoDB", err));
 
+// ✅ Ruta raíz para evitar 404 con UptimeRobot
+app.get("/", (req, res) => {
+  res.status(200).send("Servidor Acteco operativo ✅");
+});
+
 app.use("/api/palets", paletRoutes);
 app.use("/api/auth", authRoutes);
 
