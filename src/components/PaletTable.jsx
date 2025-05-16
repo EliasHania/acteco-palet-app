@@ -55,41 +55,43 @@ const PaletTable = ({
   };
 
   const exportarExcel = () => {
-    const titulo =
-      "Turno de " + encargada.charAt(0).toUpperCase() + encargada.slice(1);
+    const workbook = XLSX.utils.book_new();
 
-    const paletsOrdenados = [...palets].sort(
-      (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
-    );
-
-    const encabezado = [
+    const sheetData = [
+      [
+        `Resumen del turno de ${
+          encargada.charAt(0).toUpperCase() + encargada.slice(1)
+        }`,
+      ],
+      [],
       ["Trabajadora", "Código QR", "Tipo", "Hora"],
-      ...paletsOrdenados.map((p) => [
+    ];
+
+    const resumen = {};
+    palets.forEach((p) => {
+      sheetData.push([
         p.trabajadora,
         p.codigo,
         p.tipo,
         formatearHora(p.timestamp),
-      ]),
-    ];
-
-    const resumen = {};
-    paletsOrdenados.forEach((p) => {
+      ]);
       resumen[p.trabajadora] = (resumen[p.trabajadora] || 0) + 1;
     });
 
-    const resumenArray = [
-      [],
-      ["Resumen por trabajadora:"],
-      ...Object.entries(resumen).sort((a, b) => a[0].localeCompare(b[0])),
-      [],
-      ["Total Palets:", palets.length],
-    ];
+    sheetData.push([], ["Resumen por trabajadora:"]);
+    Object.entries(resumen)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .forEach(([trabajadora, count]) => {
+        sheetData.push([trabajadora, count]);
+      });
 
-    const datos = [[titulo], [], ...encabezado, ...resumenArray];
-    const worksheet = XLSX.utils.aoa_to_sheet(datos);
+    sheetData.push([], ["Total Palets:", palets.length]);
+
+    const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
+
     worksheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }];
+    worksheet["!cols"] = [{ wch: 20 }, { wch: 20 }, { wch: 12 }, { wch: 12 }];
 
-    const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Palets");
 
     const fecha = new Date().toLocaleDateString().replace(/\//g, "-");
