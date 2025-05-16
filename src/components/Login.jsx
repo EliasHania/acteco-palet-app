@@ -29,7 +29,6 @@ const Login = ({ onLogin }) => {
         return;
       }
 
-      // Guardar en localStorage y sessionStorage
       localStorage.setItem("token", data.token);
       sessionStorage.setItem("token", data.token);
 
@@ -95,25 +94,6 @@ const Login = ({ onLogin }) => {
             {cargando ? "Cargando..." : "Iniciar Sesión"}
           </button>
         </form>
-
-        {/* Botón temporal para comprobar token */}
-        <button
-          onClick={() => {
-            const token =
-              localStorage.getItem("token") || sessionStorage.getItem("token");
-            alert("Token guardado: " + (token || "NO HAY TOKEN"));
-          }}
-          style={{
-            marginTop: "20px",
-            padding: "10px",
-            backgroundColor: "black",
-            color: "white",
-            borderRadius: "8px",
-            width: "100%",
-          }}
-        >
-          Ver token guardado
-        </button>
       </div>
     </div>
   );
