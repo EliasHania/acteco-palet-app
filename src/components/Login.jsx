@@ -45,55 +45,59 @@ const Login = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-green-100 via-white to-green-100 p-4">
-      <div className="bg-white shadow-lg rounded-xl p-8 max-w-md w-full">
-        <div className="flex justify-center mb-6">
-          <img
-            src="/logo.jpg"
-            alt="Logo Acteco"
-            className="w-32 h-auto rounded-lg shadow"
-          />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-green-300 via-green-900 to-neutral-900 p-4">
+      <div className="login-border-effect max-w-md w-full">
+        <div className="login-inner shadow-lg">
+          <div className="flex justify-center mb-6">
+            <img
+              src="/logo.jpg"
+              alt="Logo Acteco"
+              className="w-32 h-auto rounded-lg shadow"
+            />
+          </div>
+
+          <h1 className="text-3xl font-bold text-center text-green-700 mb-2">
+            Bienvenida a Acteco S.L.
+          </h1>
+          <p className="text-center text-gray-600 mb-6">
+            Accede a la plataforma interna de gestión de palets.
+          </p>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-gray-700">Usuario</label>
+              <input
+                type="text"
+                value={usuario}
+                onChange={(e) => setUsuario(e.target.value)}
+                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="Usuario"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700">Contraseña</label>
+              <input
+                type="password"
+                value={contrasena}
+                onChange={(e) => setContrasena(e.target.value)}
+                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="Contraseña"
+                required
+              />
+            </div>
+            {error && (
+              <p className="text-red-500 text-sm text-center">{error}</p>
+            )}
+            <button
+              type="submit"
+              disabled={cargando}
+              className="w-full bg-green-600 text-white py-2 rounded-md hover:bg-green-700 transition duration-300 cursor-pointer"
+            >
+              {cargando ? "Cargando..." : "Iniciar Sesión"}
+            </button>
+          </form>
         </div>
-
-        <h1 className="text-3xl font-bold text-center text-green-700 mb-2">
-          Bienvenida a Acteco S.L.
-        </h1>
-        <p className="text-center text-gray-600 mb-6">
-          Accede a la plataforma interna de gestión de palets.
-        </p>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-gray-700">Usuario</label>
-            <input
-              type="text"
-              value={usuario}
-              onChange={(e) => setUsuario(e.target.value)}
-              className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-              placeholder="Usuario"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700">Contraseña</label>
-            <input
-              type="password"
-              value={contrasena}
-              onChange={(e) => setContrasena(e.target.value)}
-              className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-              placeholder="Contraseña"
-              required
-            />
-          </div>
-          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-          <button
-            type="submit"
-            disabled={cargando}
-            className="w-full bg-green-600 text-white py-2 rounded-md hover:bg-green-700 transition duration-300 cursor-pointer"
-          >
-            {cargando ? "Cargando..." : "Iniciar Sesión"}
-          </button>
-        </form>
       </div>
     </div>
   );
