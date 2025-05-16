@@ -1,0 +1,5 @@
+/* src/index.css o donde tengas tu CSS global */
+:root {
+  --color-acteco-indigo: #4f46e5; /* equivalente a indigo-600 */
+  --color-acteco-indigo-dark: #4338ca; /* indigo-700 */
+}
