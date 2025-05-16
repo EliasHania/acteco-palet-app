@@ -176,10 +176,11 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
 
   const exportarExcelAvanzado = () => {
     const workbook = XLSX.utils.book_new();
+    const fechaHoy = new Date().toLocaleDateString("es-ES");
 
     const generarHoja = (nombreHoja, listaPalets) => {
       const sheetData = [
-        [`Resumen del turno de ${nombreHoja}`],
+        [`Resumen del turno de ${nombreHoja} – ${fechaHoy}`],
         [],
         ["Trabajadora", "Código QR", "Tipo", "Hora"],
       ];

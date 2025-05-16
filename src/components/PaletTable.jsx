@@ -55,28 +55,19 @@ const PaletTable = ({
   };
 
   const exportarExcel = () => {
-    const titulo =
-      "Resumen del turno de " +
-      encargada.charAt(0).toUpperCase() +
-      encargada.slice(1);
+    const workbook = XLSX.utils.book_new();
 
-    const paletsOrdenados = [...palets].sort(
-      (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
-    );
+    const fechaHoy = new Date().toLocaleDateString("es-ES");
+    const titulo = `Resumen del turno de ${
+      encargada.charAt(0).toUpperCase() + encargada.slice(1)
+    } – ${fechaHoy}`;
 
-    const encabezado = [
-      ["Trabajadora", "Código QR", "Tipo", "Hora"],
-      ...paletsOrdenados.map((p) => [
-        p.trabajadora,
-        p.codigo,
-        p.tipo,
-        formatearHora(p.timestamp),
-      ]),
-    ];
+    const sheetData = [[titulo], [], ["Resumen por trabajadora:"]];
 
-    // ➤ Resumen por trabajadora con tipos de palets
+    // Resumen por trabajadora (con detalle de tipos)
     const resumenPorTrabajadora = {};
-    paletsOrdenados.forEach((p) => {
+
+    palets.forEach((p) => {
       if (!resumenPorTrabajadora[p.trabajadora]) {
         resumenPorTrabajadora[p.trabajadora] = {};
       }
@@ -84,51 +75,44 @@ const PaletTable = ({
         (resumenPorTrabajadora[p.trabajadora][p.tipo] || 0) + 1;
     });
 
-    // ➤ Resumen total por tipo en orden específico
-    const tiposOrden = [
-      "46x28",
-      "40x28",
-      "46x11",
-      "40x11",
-      "38x11",
-      "32x11",
-      "26x11",
-    ];
-    const resumenPorTipo = {};
-    paletsOrdenados.forEach((p) => {
-      resumenPorTipo[p.tipo] = (resumenPorTipo[p.tipo] || 0) + 1;
-    });
-
-    // ➤ Preparar datos para Excel
-    const sheetData = [
-      [titulo],
-      [],
-      ...encabezado,
-      [],
-      ["Resumen por trabajadora:"],
-    ];
     Object.entries(resumenPorTrabajadora).forEach(([trabajadora, tipos]) => {
-      const resumen = Object.entries(tipos)
+      const detalles = Object.entries(tipos)
         .map(
-          ([tipo, count]) => `${count} palet${count > 1 ? "s" : ""} de ${tipo}`
+          ([tipo, cantidad]) =>
+            `${cantidad} palet${cantidad > 1 ? "s" : ""} de ${tipo}`
         )
         .join(", ");
-      sheetData.push([trabajadora + ":", resumen]);
+      sheetData.push([`${trabajadora}:`, detalles]);
+    });
+
+    // Resumen por tipo de palet
+    const resumenPorTipo = {
+      "46x28": 0,
+      "40x28": 0,
+      "46x11": 0,
+      "40x11": 0,
+      "38x11": 0,
+      "32x11": 0,
+      "26x11": 0,
+    };
+
+    palets.forEach((p) => {
+      if (resumenPorTipo.hasOwnProperty(p.tipo)) {
+        resumenPorTipo[p.tipo]++;
+      }
     });
 
     sheetData.push([], ["Resumen por tipo de palet:"]);
-    tiposOrden.forEach((tipo) => {
-      const count = resumenPorTipo[tipo] || 0;
-      sheetData.push([`Total palets de ${tipo}:`, count]);
+    Object.entries(resumenPorTipo).forEach(([tipo, cantidad]) => {
+      sheetData.push([`Total palets de ${tipo}:`, cantidad]);
     });
 
     sheetData.push([], ["Total palets registrados:", palets.length]);
 
     const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
     worksheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }];
-    worksheet["!cols"] = [{ wch: 20 }, { wch: 25 }, { wch: 12 }, { wch: 12 }];
+    worksheet["!cols"] = [{ wch: 25 }, { wch: 50 }];
 
-    const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Palets");
 
     const fecha = new Date().toLocaleDateString().replace(/\//g, "-");
