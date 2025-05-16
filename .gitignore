@@ -18,8 +18,7 @@ dist-ssr/
 .vite/
 
 # Env files
-.env
-**/.env
+server/.env
 
 # System files
 .DS_Store
@@ -36,3 +35,6 @@ dist-ssr/
 
 # Optional: OS-specific
 Thumbs.db
+
+# Ignorar el script de usuarios precargados
+server/scripts/seedUsers.js
