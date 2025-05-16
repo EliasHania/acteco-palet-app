@@ -13,16 +13,16 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-// Detectar origen permitido dinámicamente para CORS
-const allowedOrigins = [
-  "http://localhost:5173",
-  "https://tudominio.netlify.app", // <-- cámbialo cuando tengas la URL de Netlify
-];
+// ✅ Lista de orígenes permitidos (local + Netlify)
+const allowedOrigins = ["http://localhost:5173", "https://acteco.netlify.app"];
 
 const io = new Server(server, {
-  cors: { origin: allowedOrigins },
+  cors: {
+    origin: allowedOrigins,
+  },
 });
 
+// ✅ Middleware CORS para Express
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -46,9 +46,10 @@ mongoose
 app.use("/api/palets", paletRoutes);
 app.use("/api/auth", authRoutes);
 
+// Compartir socket con la app
 app.set("socketio", io);
 
-// 🔧 Escuchar en puerto dinámico para producción
+// 🔧 Puerto dinámico (Render usa uno aleatorio)
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => {
   console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
