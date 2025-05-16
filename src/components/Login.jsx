@@ -89,7 +89,7 @@ const Login = ({ onLogin }) => {
           <button
             type="submit"
             disabled={cargando}
-            className="w-full bg-green-600 text-white py-2 rounded-md hover:bg-green-700 transition duration-300"
+            className="w-full bg-green-600 text-white py-2 rounded-md hover:bg-green-700 transition duration-300 cursor-pointer"
           >
             {cargando ? "Cargando..." : "Iniciar Sesión"}
           </button>
