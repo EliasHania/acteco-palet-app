@@ -98,14 +98,7 @@ const PaletForm = ({ setPalets, encargada, refrescarPalets, palets }) => {
   };
 
   const obtenerTrabajadoras = () => {
-    if (!encargada) return [];
-    const turno = encargada.toLowerCase();
-    const inicio = turno === "yoana" ? 1 : 21;
-    const fin = turno === "yoana" ? 20 : 40;
-    return Array.from(
-      { length: fin - inicio + 1 },
-      (_, i) => `Trabajadora ${i + inicio}`
-    );
+    return Array.from({ length: 40 }, (_, i) => `Trabajadora ${i + 1}`);
   };
 
   return (

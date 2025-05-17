@@ -57,7 +57,7 @@ const Login = ({ onLogin }) => {
           </div>
 
           <h1 className="text-3xl font-bold text-center text-green-700 mb-2">
-            Bienvenido a Acteco S.L.
+            Bienvenido a Acteco Productos y Servicios S.L.
           </h1>
           <p className="text-center text-gray-600 mb-6">
             Accede a la plataforma interna de gestión de palets.
