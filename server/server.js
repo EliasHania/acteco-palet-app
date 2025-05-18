@@ -14,7 +14,10 @@ const app = express();
 const server = http.createServer(app);
 
 // ✅ Lista de orígenes permitidos (local + Netlify)
-const allowedOrigins = ["http://localhost:5173", "https://acteco.netlify.app"];
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://acteco-algeciras.netlify.app",
+];
 
 const io = new Server(server, {
   cors: {
