@@ -1,29 +1,58 @@
 @import "tailwindcss";
 
-.login-border-effect {
+/* Variable personalizada */
+@property --border-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* Contenedor con borde animado con conic-gradient */
+.conic-border {
   position: relative;
-  padding: 4px; /* grosor del borde */
   border-radius: 1rem;
-  background: linear-gradient(120deg, #00ffcc, #00ff00, #00ccff, #00ffcc);
-  background-size: 300% 300%;
-  animation: animated-gradient 4s linear infinite;
-  display: inline-block;
+  /* Aumentamos el grosor del borde a 3px */
+  border: 3px solid transparent;
+  background:
+    linear-gradient(45deg, #172033, #1e293b 50%, #172033) padding-box,
+    conic-gradient(
+      from var(--border-angle),
+      rgba(22, 163, 74, 0.2) 0%, /* Más contraste entre colores */
+      rgba(22, 163, 74, 0.3) 75%,
+      #22c55e 80%,
+      #4ade80 85%, /* Color más brillante */
+      #86efac 90%,
+      #4ade80 95%,
+      rgba(22, 163, 74, 0.3) 100%
+    ) border-box;
+  animation: borderRotate 3s linear infinite; /* Animación más rápida */
+  /* Añadimos un efecto de brillo */
+  box-shadow: 0 0 15px rgba(34, 197, 94, 0.3);
 }
 
-@keyframes animated-gradient {
-  0% {
-    background-position: 0% 50%;
-  }
-  100% {
-    background-position: 100% 50%;
-  }
+/* Añadimos un pseudo-elemento para crear un efecto de brillo adicional */
+.conic-border::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  z-index: -1;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--border-angle),
+    rgba(34, 197, 94, 0) 70%,
+    rgba(34, 197, 94, 0.5) 85%,
+    rgba(34, 197, 94, 0) 95%
+  );
+  filter: blur(8px);
+  animation: borderRotate 3s linear infinite;
+  opacity: 0.7;
 }
 
-.login-inner {
-  background: white;
-  border-radius: 0.875rem;
-  padding: 2rem;
-  width: 100%;
-  height: 100%;
-  box-shadow: 0 0 12px rgba(0, 255, 0, 0.3);
+@keyframes borderRotate {
+  to {
+    --border-angle: 360deg;
+  }
 }

@@ -123,18 +123,16 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
           .map((nombre) => (
             <div
               key={nombre}
-              className="rounded-xl border bg-gray-50 p-4 mb-3"
+              onClick={() =>
+                setAbiertos((prev) => ({ ...prev, [nombre]: !prev[nombre] }))
+              }
+              className="rounded-xl border bg-gray-50 p-4 mb-3 cursor-pointer hover:bg-gray-100 transition"
               style={{ borderColor: "#e5e7eb" }}
             >
-              <button
-                className="w-full text-left font-semibold text-gray-800 hover:underline cursor-pointer"
-                onClick={() =>
-                  setAbiertos((prev) => ({ ...prev, [nombre]: !prev[nombre] }))
-                }
-              >
+              <div className="w-full text-left font-semibold text-gray-800">
                 {nombre} – {agrupado[nombre].length} palet
                 {agrupado[nombre].length !== 1 && "s"} registrados
-              </button>
+              </div>
               {abiertos[nombre] && (
                 <ul className="mt-3 space-y-2 text-sm text-gray-700">
                   {agrupado[nombre]
@@ -219,7 +217,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
   return (
     <div className="min-h-screen bg-gray-100 text-gray-800 p-6">
       <header className="text-center text-3xl font-bold text-indigo-700 mb-6">
-        Panel de Administración – Acteco S.L.
+        Panel de Administración – Acteco Productos y Servicios S.L.
       </header>
 
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-4">

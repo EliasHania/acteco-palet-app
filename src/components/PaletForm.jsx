@@ -107,9 +107,9 @@ const PaletForm = ({ setPalets, encargada, refrescarPalets, palets }) => {
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="bg-white shadow-md rounded-2xl p-6 space-y-4 border border-indigo-100 relative"
+      className="bg-white shadow-md rounded-2xl p-6 space-y-4 border border-green-100 relative"
     >
-      <h2 className="text-xl font-semibold text-indigo-600">
+      <h2 className="text-xl font-semibold text-green-600">
         Registrar nuevo palet
       </h2>
 
@@ -126,7 +126,7 @@ const PaletForm = ({ setPalets, encargada, refrescarPalets, palets }) => {
             <button
               type="button"
               onClick={() => setMostrarAlerta(false)}
-              className="text-white font-bold hover:text-gray-200 focus:outline-none"
+              className="text-white font-bold hover:text-gray-200 focus:outline-none cursor-pointer"
             >
               ✖
             </button>
@@ -145,7 +145,7 @@ const PaletForm = ({ setPalets, encargada, refrescarPalets, palets }) => {
             <button
               type="button"
               onClick={() => setMostrarConfirmacion(false)}
-              className="text-white font-bold hover:text-gray-200 focus:outline-none"
+              className="text-white font-bold hover:text-gray-200 focus:outline-none cursor-pointer"
             >
               ✖
             </button>
@@ -184,7 +184,7 @@ const PaletForm = ({ setPalets, encargada, refrescarPalets, palets }) => {
           <button
             type="button"
             onClick={() => setMostrarScanner(true)}
-            className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-xl font-medium shadow transition duration-300 cursor-pointer"
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl font-medium shadow transition duration-300 cursor-pointer"
           >
             📷 Escanear código QR
           </button>
@@ -197,13 +197,13 @@ const PaletForm = ({ setPalets, encargada, refrescarPalets, palets }) => {
           placeholder="Código QR"
           value={codigo}
           onChange={(e) => setCodigo(e.target.value)}
-          className="p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-400"
+          className="p-3 rounded-xl border border-green-300 focus:ring-2 focus:ring-green-400"
           required
         />
         <select
           value={trabajadora}
           onChange={(e) => setTrabajadora(e.target.value)}
-          className="p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-400"
+          className="p-3 rounded-xl border border-green-300 focus:ring-2 focus:ring-green-400"
           required
         >
           <option value="">Selecciona trabajadora</option>
@@ -216,7 +216,7 @@ const PaletForm = ({ setPalets, encargada, refrescarPalets, palets }) => {
         <select
           value={tipo}
           onChange={(e) => setTipo(e.target.value)}
-          className="p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-400"
+          className="p-3 rounded-xl border border-green-300 focus:ring-2 focus:ring-green-400"
           required
         >
           <option value="">Selecciona tipo de palet</option>
@@ -233,7 +233,7 @@ const PaletForm = ({ setPalets, encargada, refrescarPalets, palets }) => {
       <button
         type="submit"
         disabled={loading || !codigo || !trabajadora || !tipo}
-        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-xl transition-all cursor-pointer"
+        className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-xl transition-all cursor-pointer"
       >
         {loading ? "Guardando..." : "Registrar palet"}
       </button>

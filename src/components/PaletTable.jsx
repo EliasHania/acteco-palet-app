@@ -64,7 +64,6 @@ const PaletTable = ({
 
     const sheetData = [[titulo], [], ["Resumen por trabajadora:"]];
 
-    // Resumen por trabajadora (con detalle de tipos)
     const resumenPorTrabajadora = {};
 
     palets.forEach((p) => {
@@ -85,7 +84,6 @@ const PaletTable = ({
       sheetData.push([`${trabajadora}:`, detalles]);
     });
 
-    // Resumen por tipo de palet
     const resumenPorTipo = {
       "46x28": 0,
       "40x28": 0,
@@ -129,26 +127,23 @@ const PaletTable = ({
   const nombresTrabajadoras = Object.keys(agrupado).sort();
 
   return (
-    <div
-      className="shadow-md rounded-2xl p-6 border"
-      style={{ backgroundColor: "#ffffff", borderColor: "#e0e7ff" }}
-    >
-      <h2 className="text-xl font-semibold mb-2 text-indigo-600">
+    <div className="shadow-md rounded-2xl p-6 border border-green-100 bg-white">
+      <h2 className="text-xl font-semibold mb-2 text-green-600">
         Resumen por trabajadora
       </h2>
-      <p className="mb-1 text-gray-700 font-medium text-lg">
+      <p className="mb-1 text-green-700 font-medium text-lg">
         Turno de {encargada.charAt(0).toUpperCase() + encargada.slice(1)}
       </p>
-      <p className="mb-4 text-gray-500 text-sm">{fechaHoy}</p>
+      <p className="mb-4 text-green-500 text-sm">{fechaHoy}</p>
 
       <div className="mb-4">
-        <label className="text-sm text-gray-700 mr-2">
+        <label className="text-sm text-green-700 mr-2">
           Filtrar por trabajadora:
         </label>
         <select
           value={trabajadoraFiltrada}
           onChange={(e) => setTrabajadoraFiltrada(e.target.value)}
-          className="border rounded px-2 py-1 text-sm"
+          className="border border-green-300 rounded px-2 py-1 text-sm"
         >
           <option value="">Todas</option>
           {nombresTrabajadoras.map((nombre) => (
@@ -168,30 +163,29 @@ const PaletTable = ({
             <div
               key={nombre}
               onClick={() => toggleTrabajadora(nombre)}
-              className="rounded-xl border bg-gray-50 p-4 cursor-pointer hover:bg-gray-100 transition"
-              style={{ borderColor: "#e5e7eb" }}
+              className="rounded-xl border bg-green-50 p-4 cursor-pointer hover:bg-green-100 transition border-green-200"
             >
               <div className="w-full h-full">
-                <div className="font-semibold text-gray-800 text-base">
+                <div className="font-semibold text-green-800 text-base">
                   {nombre} – {lista.length} palet
                   {lista.length > 1 ? "s" : ""} registrados
                 </div>
                 {abiertos[nombre] && (
-                  <ul className="mt-3 space-y-2 text-sm text-gray-700">
+                  <ul className="mt-3 space-y-2 text-sm text-green-700">
                     {lista.map((p) => (
                       <li
                         key={p._id}
-                        className={`flex items-center justify-between bg-white p-2 rounded-md border ${
+                        className={`flex items-center justify-between bg-white p-2 rounded-md border border-green-100 ${
                           nuevosIds.includes(p._id) ? "animate-pulse-slow" : ""
                         }`}
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div>
                           <div className="font-semibold">{p.tipo}</div>
-                          <div className="text-gray-500 text-xs italic">
+                          <div className="text-green-500 text-xs italic">
                             QR: {p.codigo || "No disponible"}
                           </div>
-                          <div className="text-gray-400 text-xs">
+                          <div className="text-green-400 text-xs">
                             {formatearHora(p.timestamp)}
                           </div>
                         </div>
@@ -200,7 +194,7 @@ const PaletTable = ({
                             e.stopPropagation();
                             handleEliminar(p._id);
                           }}
-                          className="bg-red-500 text-white px-2 py-1 rounded-md text-sm"
+                          className="bg-red-500 text-white px-2 py-1 rounded-md text-sm cursor-pointer"
                         >
                           Eliminar
                         </button>

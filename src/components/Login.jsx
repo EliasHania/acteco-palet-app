@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 
 const Login = ({ onLogin }) => {
   const [usuario, setUsuario] = useState("");
@@ -31,7 +31,6 @@ const Login = ({ onLogin }) => {
 
       localStorage.setItem("token", data.token);
       sessionStorage.setItem("token", data.token);
-
       localStorage.setItem("encargada", data.username);
       localStorage.setItem("esAdmin", data.role === "admin");
 
@@ -45,50 +44,52 @@ const Login = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-green-300 via-green-900 to-neutral-900 p-4">
-      <div className="login-border-effect max-w-md w-full">
-        <div className="login-inner shadow-lg">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-green-200 via-green-800 to-neutral-900 p-4">
+      <div className="conic-border w-full max-w-md rounded-2xl">
+        <div className="p-6 bg-emerald-900/40 backdrop-blur-sm rounded-2xl">
           <div className="flex justify-center mb-6">
             <img
               src="/logo.jpg"
               alt="Logo Acteco"
-              className="w-32 h-auto rounded-lg shadow"
+              className="w-32 h-auto rounded-lg drop-shadow-md"
             />
           </div>
 
-          <h1 className="text-3xl font-bold text-center text-green-700 mb-2">
+          <h1 className="text-3xl font-bold text-center text-green-300 mb-2">
             Bienvenido a Acteco Productos y Servicios S.L.
           </h1>
-          <p className="text-center text-gray-600 mb-6">
-            Accede a la plataforma interna de gestión de palets.
+          <p className="text-center text-green-100 mb-6">
+            Plataforma interna de gestión de palets en la planta de Algeciras.
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-gray-700">Usuario</label>
+              <label className="block text-green-100 mb-1">Usuario</label>
               <input
                 type="text"
                 value={usuario}
                 onChange={(e) => setUsuario(e.target.value)}
-                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full px-4 py-2 border border-green-700/40 rounded-md bg-emerald-800/20 text-green-100 placeholder-white/80 focus:outline-none focus:ring-2 focus:ring-green-400"
                 placeholder="Usuario"
                 required
               />
             </div>
             <div>
-              <label className="block text-gray-700">Contraseña</label>
+              <label className="block text-green-100 mb-1">Contraseña</label>
               <input
                 type="password"
                 value={contrasena}
                 onChange={(e) => setContrasena(e.target.value)}
-                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full px-4 py-2 border border-green-700/40 rounded-md bg-emerald-800/20 text-green-100 placeholder-white/80 focus:outline-none focus:ring-2 focus:ring-green-400"
                 placeholder="Contraseña"
                 required
               />
             </div>
+
             {error && (
               <p className="text-red-500 text-sm text-center">{error}</p>
             )}
+
             <button
               type="submit"
               disabled={cargando}
