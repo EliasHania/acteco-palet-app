@@ -4,9 +4,9 @@ import PaletForm from "./components/PaletForm";
 import PaletTable from "./components/PaletTable";
 import TrabajadorasManager from "./components/TrabajadorasManager";
 import AdminDashboard from "./components/AdminDashboard";
+import Navbar from "./components/Navbar";
 import { io } from "socket.io-client";
 
-// 🔧 Usar backend dinámico
 const socket = io(import.meta.env.VITE_BACKEND_URL);
 
 function App() {
@@ -21,6 +21,8 @@ function App() {
   const [fechaSeleccionada, setFechaSeleccionada] = useState(() =>
     new Date().toLocaleDateString("sv-SE")
   );
+
+  const [vista, setVista] = useState("palets");
 
   const refrescarPalets = async (fecha = fechaSeleccionada) => {
     try {
@@ -153,35 +155,33 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 text-gray-800 p-4">
-      <header className="text-center text-3xl font-bold mb-8 text-green-700">
-        Web Acteco – Registro de Palets
-      </header>
-      <div className="text-right mb-4">
-        <span className="mr-4">
-          Turno de {encargada.charAt(0).toUpperCase() + encargada.slice(1)}
-        </span>
-        <button
-          onClick={handleLogout}
-          className="bg-red-500 text-white px-4 py-1 rounded-md hover:bg-red-600 cursor-pointer"
-        >
-          Cerrar Sesión
-        </button>
-      </div>
+      <Navbar
+        encargada={encargada}
+        vista={vista}
+        setVista={setVista}
+        onLogout={handleLogout}
+      />
+
       <main className="max-w-4xl mx-auto space-y-6">
-        <PaletForm
-          setPalets={setPalets}
-          encargada={encargada}
-          refrescarPalets={refrescarPalets}
-          palets={palets}
-        />
-        <PaletTable
-          palets={palets}
-          encargada={encargada}
-          setPalets={setPalets}
-          refrescarPalets={refrescarPalets}
-          nuevosIds={nuevosIds}
-        />
-        <TrabajadorasManager />
+        {vista === "palets" && (
+          <>
+            <PaletForm
+              setPalets={setPalets}
+              encargada={encargada}
+              refrescarPalets={refrescarPalets}
+              palets={palets}
+            />
+            <PaletTable
+              palets={palets}
+              encargada={encargada}
+              setPalets={setPalets}
+              refrescarPalets={refrescarPalets}
+              nuevosIds={nuevosIds}
+            />
+          </>
+        )}
+
+        {vista === "trabajadoras" && <TrabajadorasManager />}
       </main>
     </div>
   );

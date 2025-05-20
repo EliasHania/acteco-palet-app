@@ -71,7 +71,7 @@ const TrabajadorasManager = () => {
         />
         <button
           onClick={agregarTrabajadora}
-          className="bg-green-600 text-white px-4 rounded hover:bg-green-700"
+          className="bg-green-600 text-white px-4 rounded hover:bg-green-700 cursor-pointer"
         >
           Agregar
         </button>
@@ -86,7 +86,7 @@ const TrabajadorasManager = () => {
             <span>{nombre}</span>
             <button
               onClick={() => eliminarTrabajadora(nombre)}
-              className="text-red-500 hover:text-red-700 text-sm"
+              className="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-1 rounded-lg transition cursor-pointer"
             >
               Eliminar
             </button>

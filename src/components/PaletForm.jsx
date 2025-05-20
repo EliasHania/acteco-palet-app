@@ -16,6 +16,8 @@ const PaletForm = ({ setPalets, encargada, refrescarPalets, palets }) => {
   const [mostrarConfirmacion, setMostrarConfirmacion] = useState(false);
   const [mensajeConfirmacion, setMensajeConfirmacion] = useState("");
 
+  const [listaTrabajadoras, setListaTrabajadoras] = useState([]);
+
   useEffect(() => {
     if (mostrarAlerta || mostrarConfirmacion) {
       const timeout = setTimeout(() => {
@@ -25,6 +27,29 @@ const PaletForm = ({ setPalets, encargada, refrescarPalets, palets }) => {
       return () => clearTimeout(timeout);
     }
   }, [mostrarAlerta, mostrarConfirmacion]);
+
+  useEffect(() => {
+    const cargarTrabajadoras = async () => {
+      try {
+        const token =
+          localStorage.getItem("token") || sessionStorage.getItem("token");
+        const res = await fetch(
+          `${import.meta.env.VITE_BACKEND_URL}/api/trabajadoras`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        const data = await res.json();
+        setListaTrabajadoras(data);
+      } catch (err) {
+        console.error("Error al cargar trabajadoras:", err);
+      }
+    };
+
+    cargarTrabajadoras();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -90,10 +115,6 @@ const PaletForm = ({ setPalets, encargada, refrescarPalets, palets }) => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const obtenerTrabajadoras = () => {
-    return Array.from({ length: 40 }, (_, i) => `Trabajadora ${i + 1}`);
   };
 
   return (
@@ -202,7 +223,7 @@ const PaletForm = ({ setPalets, encargada, refrescarPalets, palets }) => {
           required
         >
           <option value="">Selecciona trabajadora</option>
-          {obtenerTrabajadoras().map((nombre, index) => (
+          {listaTrabajadoras.map((nombre, index) => (
             <option key={index} value={nombre}>
               {nombre}
             </option>
