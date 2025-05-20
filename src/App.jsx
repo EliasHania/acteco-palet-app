@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import Login from "./components/Login";
 import PaletForm from "./components/PaletForm";
 import PaletTable from "./components/PaletTable";
+import TrabajadorasManager from "./components/TrabajadorasManager";
 import AdminDashboard from "./components/AdminDashboard";
 import { io } from "socket.io-client";
 
@@ -180,6 +181,7 @@ function App() {
           refrescarPalets={refrescarPalets}
           nuevosIds={nuevosIds}
         />
+        <TrabajadorasManager />
       </main>
     </div>
   );

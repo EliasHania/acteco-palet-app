@@ -7,6 +7,7 @@ import { Server } from "socket.io";
 
 import paletRoutes from "./routes/palets.js";
 import authRoutes from "./routes/auth.js";
+import trabajadoraRoutes from "./routes/trabajadoras.js";
 
 dotenv.config();
 
@@ -56,6 +57,9 @@ app.use("/api/auth", authRoutes);
 
 // Compartir socket con la app
 app.set("socketio", io);
+
+// Ruta trabajadoras
+app.use("/api/trabajadoras", trabajadoraRoutes);
 
 // 🔧 Puerto dinámico (Render usa uno aleatorio)
 const PORT = process.env.PORT || 4000;
