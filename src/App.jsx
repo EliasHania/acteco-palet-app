@@ -52,9 +52,21 @@ function App() {
       const filtrados = data; // ✅ NO vuelvas a filtrar aquí
       console.log("🔵 Palets filtrados por fecha:", filtrados);
 
+      if (!esAdmin) {
+        console.log("👀 Comparando registros:");
+        data.forEach((p) => {
+          console.log(
+            "↪️",
+            p.registradaPor?.trim().toLowerCase(),
+            "==?",
+            encargada.trim().toLowerCase()
+          );
+        });
+      }
+
       const visibles = esAdmin
-        ? filtrados
-        : filtrados.filter(
+        ? data
+        : data.filter(
             (p) =>
               typeof p.registradaPor === "string" &&
               p.registradaPor.trim().toLowerCase() ===
