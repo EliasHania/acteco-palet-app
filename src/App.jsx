@@ -53,7 +53,10 @@ function App() {
       const visibles = esAdmin
         ? filtrados
         : filtrados.filter(
-            (p) => p.registradaPor?.toLowerCase() === encargada.toLowerCase()
+            (p) =>
+              typeof p.registradaPor === "string" &&
+              p.registradaPor.trim().toLowerCase() ===
+                encargada.trim().toLowerCase()
           );
 
       const nuevos = visibles.filter(
