@@ -37,6 +37,7 @@ function App() {
       if (!res.ok) throw new Error("No autorizado");
 
       const data = await res.json();
+      console.log("🟢 Datos recibidos de la API:", data);
 
       const esMismaFecha = (timestampISO, fechaSeleccionada) => {
         const fechaPalet = new Date(timestampISO);
@@ -49,6 +50,7 @@ function App() {
       };
 
       const filtrados = data.filter((p) => esMismaFecha(p.timestamp, fecha));
+      console.log("🔵 Palets filtrados por fecha:", filtrados);
 
       const visibles = esAdmin
         ? filtrados
@@ -58,6 +60,8 @@ function App() {
               p.registradaPor.trim().toLowerCase() ===
                 encargada.trim().toLowerCase()
           );
+
+      console.log("🟠 Palets visibles para", encargada, ":", visibles);
 
       const nuevos = visibles.filter(
         (p) => !palets.some((x) => x._id === p._id)
