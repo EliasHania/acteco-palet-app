@@ -49,7 +49,7 @@ function App() {
         );
       };
 
-      const filtrados = data.filter((p) => esMismaFecha(p.timestamp, fecha));
+      const filtrados = data; // ✅ NO vuelvas a filtrar aquí
       console.log("🔵 Palets filtrados por fecha:", filtrados);
 
       const visibles = esAdmin
