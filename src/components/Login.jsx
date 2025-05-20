@@ -30,11 +30,14 @@ const Login = ({ onLogin }) => {
       }
 
       localStorage.setItem("token", data.token);
-      sessionStorage.setItem("token", data.token);
-      localStorage.setItem("encargada", data.username);
-      localStorage.setItem("esAdmin", data.role === "admin");
 
-      onLogin(data.username, data.role === "admin");
+      sessionStorage.setItem("token", data.token);
+
+      const encargadaLimpia = data.username.trim().toLowerCase();
+      localStorage.setItem("encargada", encargadaLimpia);
+      onLogin(encargadaLimpia, data.role === "admin");
+
+      localStorage.setItem("esAdmin", data.role === "admin");
     } catch (err) {
       setError("Error de conexión");
       console.error(err);

@@ -87,6 +87,7 @@ function App() {
 
   const handleLogin = (nombre, isAdmin) => {
     setEncargada(nombre);
+    console.log("🔐 Encargada establecida:", nombre);
     setEsAdmin(isAdmin);
     localStorage.setItem("encargada", nombre);
     localStorage.setItem("esAdmin", isAdmin);
