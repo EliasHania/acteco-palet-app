@@ -126,7 +126,9 @@ function App() {
               encargada={encargada}
               refrescarPalets={refrescarPalets}
               palets={palets}
+              fechaSeleccionada={fechaSeleccionada} // 👈 AÑADIDO
             />
+
             <PaletTable
               palets={palets}
               encargada={encargada}

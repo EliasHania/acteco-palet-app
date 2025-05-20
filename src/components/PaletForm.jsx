@@ -2,7 +2,13 @@ import React, { useState, useEffect } from "react";
 import QrScanner from "./QrScanner";
 import { motion, AnimatePresence } from "framer-motion";
 
-const PaletForm = ({ setPalets, encargada, refrescarPalets, palets }) => {
+const PaletForm = ({
+  setPalets,
+  encargada,
+  refrescarPalets,
+  palets,
+  fechaSeleccionada,
+}) => {
   const [codigo, setCodigo] = useState("");
   const [trabajadora, setTrabajadora] = useState("");
   const [tipo, setTipo] = useState("");
@@ -101,7 +107,7 @@ const PaletForm = ({ setPalets, encargada, refrescarPalets, palets }) => {
 
       if (!resPost.ok) throw new Error("Error al guardar palet");
 
-      setTimeout(() => refrescarPalets(), 100);
+      setTimeout(() => refrescarPalets(fechaSeleccionada), 100);
 
       setCodigo("");
       setTrabajadora("");
