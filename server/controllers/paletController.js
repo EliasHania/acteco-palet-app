@@ -73,9 +73,12 @@ export const getPaletsPorFecha = async (req, res) => {
 
     const [año, mes, dia] = fecha.split("-").map(Number);
 
-    // Aquí estamos creando fecha local en vez de UTC
-    const inicio = new Date(año, mes - 1, dia, 0, 0, 0);
-    const fin = new Date(año, mes - 1, dia + 1, 0, 0, 0);
+    // Fechas en UTC puras
+    const inicio = new Date(Date.UTC(año, mes - 1, dia, 0, 0, 0));
+    const fin = new Date(Date.UTC(año, mes - 1, dia + 1, 0, 0, 0));
+
+    console.log("⏰ UTC inicio:", inicio.toISOString());
+    console.log("⏰ UTC fin:", fin.toISOString());
 
     const palets = await Palet.find({
       timestamp: { $gte: inicio, $lt: fin },
@@ -83,6 +86,7 @@ export const getPaletsPorFecha = async (req, res) => {
 
     res.json(palets);
   } catch (err) {
+    console.error("❌ Error al obtener palets por fecha:", err);
     res.status(500).json({ msg: "Error al obtener palets por fecha" });
   }
 };
