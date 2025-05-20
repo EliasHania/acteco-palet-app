@@ -68,10 +68,9 @@ function App() {
 
   useEffect(() => {
     if (encargada) {
-      const handleNuevoPalet = () =>
-        refrescarPalets(new Date().toISOString().split("T")[0]);
+      const handleNuevoPalet = () => refrescarPalets(fechaSeleccionada);
 
-      refrescarPalets();
+      refrescarPalets(fechaSeleccionada); // aplicar fecha actual seleccionada
       socket.on("nuevoPalet", handleNuevoPalet);
       return () => socket.off("nuevoPalet", handleNuevoPalet);
     }
