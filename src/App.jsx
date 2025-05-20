@@ -49,8 +49,10 @@ function App() {
       );
 
       const visibles = esAdmin
-        ? filtrados
-        : filtrados.filter((p) => p.registradaPor === encargada);
+        ? data
+        : data.filter(
+            (p) => p.registradaPor?.toLowerCase() === encargada.toLowerCase()
+          );
 
       const nuevos = visibles.filter(
         (p) => !palets.some((x) => x._id === p._id)
