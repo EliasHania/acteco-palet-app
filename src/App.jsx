@@ -38,19 +38,21 @@ function App() {
 
       const data = await res.json();
 
-      const normalizar = (f) => {
-        const d = new Date(f);
-        d.setHours(0, 0, 0, 0);
-        return d.getTime();
+      const esMismaFecha = (timestampISO, fechaSeleccionada) => {
+        const fechaPalet = new Date(timestampISO);
+        const [añoSel, mesSel, diaSel] = fechaSeleccionada.split("-");
+        return (
+          fechaPalet.getFullYear() === parseInt(añoSel) &&
+          fechaPalet.getMonth() + 1 === parseInt(mesSel) &&
+          fechaPalet.getDate() === parseInt(diaSel)
+        );
       };
 
-      const filtrados = data.filter(
-        (p) => normalizar(p.timestamp) === normalizar(fecha)
-      );
+      const filtrados = data.filter((p) => esMismaFecha(p.timestamp, fecha));
 
       const visibles = esAdmin
-        ? data
-        : data.filter(
+        ? filtrados
+        : filtrados.filter(
             (p) => p.registradaPor?.toLowerCase() === encargada.toLowerCase()
           );
 
