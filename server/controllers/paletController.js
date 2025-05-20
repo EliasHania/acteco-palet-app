@@ -71,12 +71,12 @@ export const getPaletsPorFecha = async (req, res) => {
     const fecha = req.query.fecha;
     if (!fecha) return res.status(400).json({ msg: "Fecha requerida" });
 
-    const inicio = new Date(fecha);
-    const fin = new Date(fecha);
-    fin.setDate(fin.getDate() + 1);
+    // Crear rangos UTC correctamente
+    const inicio = new Date(`${fecha}T00:00:00.000Z`);
+    const fin = new Date(`${fecha}T23:59:59.999Z`);
 
     const palets = await Palet.find({
-      timestamp: { $gte: inicio, $lt: fin },
+      timestamp: { $gte: inicio, $lte: fin },
     });
 
     res.json(palets);
