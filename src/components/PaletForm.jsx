@@ -51,16 +51,11 @@ const PaletForm = ({ setPalets, encargada, refrescarPalets, palets }) => {
 
       const hoy = new Date().toISOString().split("T")[0];
       const yaExiste = existentes.some(
-        (p) =>
-          p.codigo === codigo &&
-          p.trabajadora === trabajadora &&
-          p.timestamp.startsWith(hoy)
+        (p) => p.codigo === codigo && p.timestamp.startsWith(hoy)
       );
 
       if (yaExiste) {
-        setMensajeError(
-          "⚠️ Este código QR ya ha sido registrado hoy por esta trabajadora."
-        );
+        setMensajeError("⚠️ Este código QR ya ha sido registrado hoy.");
         setMostrarAlerta(true);
         setLoading(false);
         return;
