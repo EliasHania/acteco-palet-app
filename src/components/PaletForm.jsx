@@ -60,6 +60,7 @@ const PaletForm = ({ setPalets, encargada, refrescarPalets, palets }) => {
       trabajadora,
       tipo,
       timestamp: new Date().toISOString(),
+      registradaPor: encargada, // 👈 AÑADIDO: nombre de quien registra (yoana o lidia)
     };
 
     try {

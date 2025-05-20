@@ -28,7 +28,7 @@ function App() {
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(
-        `${import.meta.env.VITE_BACKEND_URL}/api/palets`,
+        `${import.meta.env.VITE_BACKEND_URL}/api/palets/fecha?fecha=${fecha}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -48,18 +48,9 @@ function App() {
         (p) => normalizar(p.timestamp) === normalizar(fecha)
       );
 
-      let visibles = [];
-      if (encargada === "yoana") {
-        visibles = filtrados.filter(
-          (p) => parseInt(p.trabajadora?.split(" ")[1]) <= 20
-        );
-      } else if (encargada === "lidia") {
-        visibles = filtrados.filter(
-          (p) => parseInt(p.trabajadora?.split(" ")[1]) >= 21
-        );
-      } else {
-        visibles = filtrados;
-      }
+      const visibles = esAdmin
+        ? filtrados
+        : filtrados.filter((p) => p.registradaPor === encargada);
 
       const nuevos = visibles.filter(
         (p) => !palets.some((x) => x._id === p._id)
@@ -89,7 +80,7 @@ function App() {
     setEsAdmin(isAdmin);
     localStorage.setItem("encargada", nombre);
     localStorage.setItem("esAdmin", isAdmin);
-    refrescarPalets();
+    refrescarPalets(fechaSeleccionada); // ✅ aquí se aplica la fecha seleccionada
   };
 
   const handleLogout = () => {
@@ -99,43 +90,6 @@ function App() {
     localStorage.removeItem("encargada");
     localStorage.removeItem("esAdmin");
     localStorage.removeItem("token");
-  };
-
-  const handleEliminarTodos = async () => {
-    if (!window.confirm("¿Seguro que deseas eliminar los palets?")) return;
-    try {
-      const token = localStorage.getItem("token");
-      if (esAdmin) {
-        await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/palets/all`, {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        });
-      } else {
-        const inicio = encargada === "yoana" ? 1 : 21;
-        const fin = encargada === "yoana" ? 20 : 40;
-        const trabajadoras = Array.from(
-          { length: fin - inicio + 1 },
-          (_, i) => `Trabajadora ${i + inicio}`
-        );
-        await Promise.all(
-          trabajadoras.map((nombre) =>
-            fetch(
-              `${
-                import.meta.env.VITE_BACKEND_URL
-              }/api/palets/trabajadora/${encodeURIComponent(nombre)}`,
-              {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${token}` },
-              }
-            )
-          )
-        );
-      }
-      refrescarPalets();
-      alert("Palets eliminados correctamente.");
-    } catch (error) {
-      console.error("Error al eliminar palets:", error);
-    }
   };
 
   if (!encargada) return <Login onLogin={handleLogin} />;

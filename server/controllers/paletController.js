@@ -19,10 +19,16 @@ export const getPalets = async (req, res) => {
 
 // Crear un nuevo palet y emitir evento vía WebSocket
 export const createPalet = async (req, res) => {
-  const { trabajadora, tipo, timestamp, codigo } = req.body;
+  const { trabajadora, tipo, timestamp, codigo, registradaPor } = req.body;
 
   try {
-    const nuevoPalet = new Palet({ trabajadora, tipo, timestamp, codigo });
+    const nuevoPalet = new Palet({
+      trabajadora,
+      tipo,
+      timestamp,
+      codigo,
+      registradaPor,
+    });
     await nuevoPalet.save();
 
     // Emitir a todos los clientes conectados el nuevo palet

@@ -3,7 +3,11 @@ import mongoose from "mongoose";
 const PaletSchema = new mongoose.Schema({
   trabajadora: String,
   tipo: String,
-  codigo: String, // ✅ Añadir esto
+  codigo: String,
+  registradaPor: {
+    type: String,
+    required: true, // ✅ campo obligatorio: 'yoana' o 'lidia'
+  },
   timestamp: {
     type: Date,
     default: Date.now,

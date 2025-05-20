@@ -36,16 +36,6 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
     return lista.filter((p) => normalizarFecha(p.timestamp) === ref);
   };
 
-  const separarPorTurno = (lista) => {
-    const yoana = lista.filter(
-      (p) => parseInt(p.trabajadora?.split(" ")[1]) <= 20
-    );
-    const lidia = lista.filter(
-      (p) => parseInt(p.trabajadora?.split(" ")[1]) >= 21
-    );
-    return { yoana, lidia };
-  };
-
   const calcularRecuento = (lista) => {
     const conteo = {};
     lista.forEach((p) => {
@@ -167,9 +157,14 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
   };
 
   const paletsFiltrados = filtrarPorFecha(palets);
-  const { yoana, lidia } = separarPorTurno(paletsFiltrados);
+
+  // Separar palets según quién los registró
+  const yoana = paletsFiltrados.filter((p) => p.registradaPor === "yoana");
+  const lidia = paletsFiltrados.filter((p) => p.registradaPor === "lidia");
+
   const recuentoYoana = calcularRecuento(yoana);
   const recuentoLidia = calcularRecuento(lidia);
+
   const recuentoTotal = calcularRecuento(paletsFiltrados);
 
   const exportarExcelAvanzado = () => {
