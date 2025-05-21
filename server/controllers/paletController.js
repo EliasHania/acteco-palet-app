@@ -71,24 +71,20 @@ export const getPaletsPorFecha = async (req, res) => {
     const fecha = req.query.fecha;
     if (!fecha) return res.status(400).json({ msg: "Fecha requerida" });
 
-    const [año, mes, dia] = fecha.split("-").map(Number);
+    const inicio = new Date(fecha);
+    inicio.setHours(0, 0, 0, 0); // Hora local 00:00
 
-    const inicio = new Date(Date.UTC(año, mes - 1, dia, 0, 0, 0));
-    const fin = new Date(Date.UTC(año, mes - 1, dia + 1, 0, 0, 0));
+    const fin = new Date(fecha);
+    fin.setHours(23, 59, 59, 999); // Hora local 23:59
 
-    console.log("⏰ UTC inicio:", inicio.toISOString());
-    console.log("⏰ UTC fin:", fin.toISOString());
-    console.log("🔐 Usuario autenticado:", req.user); // <--- esto es clave
+    console.log("📆 Rango local desde:", inicio.toISOString());
+    console.log("📆 Rango local hasta:", fin.toISOString());
 
     const palets = await Palet.find({
-      timestamp: { $gte: inicio, $lt: fin },
+      timestamp: { $gte: inicio, $lte: fin },
     });
 
-    console.log("📦 Total palets encontrados:", palets.length);
-    if (palets.length > 0) {
-      console.log("📋 Primer palet:", palets[0]);
-    }
-
+    console.log("📦 Palets encontrados:", palets.length);
     res.json(palets);
   } catch (err) {
     console.error("❌ Error al obtener palets por fecha:", err);
