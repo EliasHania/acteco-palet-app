@@ -8,6 +8,7 @@ import { Server } from "socket.io";
 import paletRoutes from "./routes/palets.js";
 import authRoutes from "./routes/auth.js";
 import trabajadoraRoutes from "./routes/trabajadoras.js";
+import cajaRoutes from "./routes/cajas.js";
 
 dotenv.config();
 
@@ -66,3 +67,5 @@ const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => {
   console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
 });
+
+app.use("/api/cajas", cajaRoutes);

@@ -4,6 +4,7 @@ import PaletForm from "./components/PaletForm";
 import PaletTable from "./components/PaletTable";
 import TrabajadorasManager from "./components/TrabajadorasManager";
 import AdminDashboard from "./components/AdminDashboard";
+import CajasForm from "./components/CajasForm";
 import Navbar from "./components/Navbar";
 import { io } from "socket.io-client";
 
@@ -133,6 +134,7 @@ function App() {
             />
           </>
         )}
+        {vista === "cajas" && <CajasForm />}
         {vista === "trabajadoras" && <TrabajadorasManager />}
       </main>
     </div>
