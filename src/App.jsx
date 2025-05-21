@@ -10,8 +10,8 @@ import { io } from "socket.io-client";
 const socket = io(import.meta.env.VITE_BACKEND_URL);
 
 function App() {
-  const [encargada, setEncargada] = useState(
-    () => localStorage.getItem("encargada") || ""
+  const [encargada, setEncargada] = useState(() =>
+    (localStorage.getItem("encargada") || "").trim().toLowerCase()
   );
   const [esAdmin, setEsAdmin] = useState(
     () => localStorage.getItem("esAdmin") === "true"
@@ -39,17 +39,7 @@ function App() {
       const data = await res.json();
       console.log("🟢 Datos recibidos de la API:", data);
 
-      const esMismaFecha = (timestampISO, fechaSeleccionada) => {
-        const fechaPalet = new Date(timestampISO);
-        const [añoSel, mesSel, diaSel] = fechaSeleccionada.split("-");
-        return (
-          fechaPalet.getFullYear() === parseInt(añoSel) &&
-          fechaPalet.getMonth() + 1 === parseInt(mesSel) &&
-          fechaPalet.getDate() === parseInt(diaSel)
-        );
-      };
-
-      const filtrados = data; // ✅ NO vuelvas a filtrar aquí
+      const filtrados = data;
       console.log("🔵 Palets filtrados por fecha:", filtrados);
 
       if (!esAdmin) {
@@ -59,7 +49,7 @@ function App() {
             "↪️",
             p.registradaPor?.trim().toLowerCase(),
             "==?",
-            encargada.trim().toLowerCase()
+            encargada
           );
         });
       }
@@ -69,8 +59,7 @@ function App() {
         : data.filter(
             (p) =>
               typeof p.registradaPor === "string" &&
-              p.registradaPor.trim().toLowerCase() ===
-                encargada.trim().toLowerCase()
+              p.registradaPor.trim().toLowerCase() === encargada
           );
 
       console.log("🟠 Palets visibles para", encargada, ":", visibles);
@@ -91,19 +80,20 @@ function App() {
     if (encargada) {
       const handleNuevoPalet = () => refrescarPalets(fechaSeleccionada);
 
-      refrescarPalets(fechaSeleccionada); // aplicar fecha actual seleccionada
+      refrescarPalets(fechaSeleccionada);
       socket.on("nuevoPalet", handleNuevoPalet);
       return () => socket.off("nuevoPalet", handleNuevoPalet);
     }
   }, [encargada, fechaSeleccionada]);
 
   const handleLogin = (nombre, isAdmin) => {
-    setEncargada(nombre);
-    console.log("🔐 Encargada establecida:", nombre);
+    const nombreLimpio = nombre.trim().toLowerCase();
+    setEncargada(nombreLimpio);
     setEsAdmin(isAdmin);
-    localStorage.setItem("encargada", nombre);
+    console.log("🔐 Encargada establecida:", nombreLimpio);
+    localStorage.setItem("encargada", nombreLimpio);
     localStorage.setItem("esAdmin", isAdmin);
-    refrescarPalets(fechaSeleccionada); // ✅ aquí se aplica la fecha seleccionada
+    refrescarPalets(fechaSeleccionada);
   };
 
   const handleLogout = () => {
@@ -147,9 +137,8 @@ function App() {
               encargada={encargada}
               refrescarPalets={refrescarPalets}
               palets={palets}
-              fechaSeleccionada={fechaSeleccionada} // 👈 AÑADIDO
+              fechaSeleccionada={fechaSeleccionada}
             />
-
             <PaletTable
               palets={palets}
               encargada={encargada}
@@ -159,7 +148,6 @@ function App() {
             />
           </>
         )}
-
         {vista === "trabajadoras" && <TrabajadorasManager />}
       </main>
     </div>
