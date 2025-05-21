@@ -16,23 +16,25 @@ export const createCaja = async (req, res) => {
   }
 };
 
-// ✅ Obtener cajas por fecha y encargada
+// ✅ Obtener cajas por fecha
 export const getCajasPorFecha = async (req, res) => {
   try {
     const { fecha } = req.query;
     if (!fecha) return res.status(400).json({ msg: "Fecha requerida" });
 
     const start = new Date(fecha);
-    start.setHours(0, 0, 0, 0);
+    start.setUTCHours(0, 0, 0, 0); // 🕓 ¡mejor usar UTC!
     const end = new Date(fecha);
-    end.setHours(23, 59, 59, 999);
+    end.setUTCHours(23, 59, 59, 999);
 
-    const registradaPor = req.user.username.toLowerCase();
-    const cajas = await Caja.find({
-      timestamp: { $gte: start, $lte: end },
-      registradaPor,
-    }).sort({ timestamp: 1 });
+    const isAdmin = req.user.username.toLowerCase() === "admin"; // o como se defina
+    const filter = { timestamp: { $gte: start, $lte: end } };
 
+    if (!isAdmin) {
+      filter.registradaPor = req.user.username.toLowerCase();
+    }
+
+    const cajas = await Caja.find(filter).sort({ timestamp: 1 });
     res.json(cajas);
   } catch (err) {
     console.error("❌ Error al obtener cajas:", err);
