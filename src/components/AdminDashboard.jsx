@@ -61,7 +61,8 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
   const calcularRecuento = (lista) => {
     const conteo = {};
     lista.forEach((p) => {
-      conteo[p.tipo] = (conteo[p.tipo] || 0) + 1;
+      const cantidad = p.cantidad || 1;
+      conteo[p.tipo] = (conteo[p.tipo] || 0) + cantidad;
     });
     return conteo;
   };
