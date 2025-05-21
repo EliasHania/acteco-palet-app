@@ -27,7 +27,6 @@ function App() {
   const refrescarPalets = async (fecha = fechaSeleccionada) => {
     try {
       const token = localStorage.getItem("token");
-      console.log("🔑 Token usado:", token);
       const res = await fetch(
         `${import.meta.env.VITE_BACKEND_URL}/api/palets/fecha?fecha=${fecha}`,
         {
@@ -38,22 +37,6 @@ function App() {
       if (!res.ok) throw new Error("No autorizado");
 
       const data = await res.json();
-      console.log("🟢 Datos recibidos de la API:", data);
-
-      const filtrados = data;
-      console.log("🔵 Palets filtrados por fecha:", filtrados);
-
-      if (!esAdmin) {
-        console.log("👀 Comparando registros:");
-        data.forEach((p) => {
-          console.log(
-            "↪️",
-            p.registradaPor?.trim().toLowerCase(),
-            "==?",
-            encargada
-          );
-        });
-      }
 
       const visibles = esAdmin
         ? data
@@ -68,8 +51,6 @@ function App() {
               .replace(/[^a-z]/gi, "");
             return limpiado === encargadaLimpia;
           });
-
-      console.log("🟠 Palets visibles para", encargada, ":", visibles);
 
       const nuevos = visibles.filter(
         (p) => !palets.some((x) => x._id === p._id)
@@ -86,7 +67,6 @@ function App() {
   useEffect(() => {
     if (encargada) {
       const handleNuevoPalet = () => refrescarPalets(fechaSeleccionada);
-
       refrescarPalets(fechaSeleccionada);
       socket.on("nuevoPalet", handleNuevoPalet);
       return () => socket.off("nuevoPalet", handleNuevoPalet);
@@ -97,7 +77,6 @@ function App() {
     const nombreLimpio = nombre.trim().toLowerCase();
     setEncargada(nombreLimpio);
     setEsAdmin(isAdmin);
-    console.log("🔐 Encargada establecida:", nombreLimpio);
     localStorage.setItem("encargada", nombreLimpio);
     localStorage.setItem("esAdmin", isAdmin);
     refrescarPalets(fechaSeleccionada);
@@ -135,7 +114,6 @@ function App() {
         setVista={setVista}
         onLogout={handleLogout}
       />
-
       <main className="max-w-4xl mx-auto space-y-6">
         {vista === "palets" && (
           <>
