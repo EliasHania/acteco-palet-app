@@ -436,7 +436,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
         {renderRecuento(
           "📦 Recuento general (cajas)",
           recuentoTotalCajas,
-          cajasFiltradas.length,
+          cajasFiltradas.reduce((acc, caja) => acc + caja.cantidad, 0),
           true
         )}
       </div>
