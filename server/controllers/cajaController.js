@@ -22,12 +22,11 @@ export const getCajasPorFecha = async (req, res) => {
     const { fecha } = req.query;
     if (!fecha) return res.status(400).json({ msg: "Fecha requerida" });
 
-    const start = new Date(fecha);
-    start.setUTCHours(0, 0, 0, 0); // 🕓 ¡mejor usar UTC!
-    const end = new Date(fecha);
-    end.setUTCHours(23, 59, 59, 999);
+    const [y, m, d] = fecha.split("-").map(Number);
+    const start = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+    const end = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999));
 
-    const isAdmin = req.user.username.toLowerCase() === "admin"; // o como se defina
+    const isAdmin = req.user.username.toLowerCase() === "admin";
     const filter = { timestamp: { $gte: start, $lte: end } };
 
     if (!isAdmin) {
