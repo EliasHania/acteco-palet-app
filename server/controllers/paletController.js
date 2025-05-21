@@ -73,16 +73,21 @@ export const getPaletsPorFecha = async (req, res) => {
 
     const [año, mes, dia] = fecha.split("-").map(Number);
 
-    // Fechas en UTC puras
     const inicio = new Date(Date.UTC(año, mes - 1, dia, 0, 0, 0));
     const fin = new Date(Date.UTC(año, mes - 1, dia + 1, 0, 0, 0));
 
     console.log("⏰ UTC inicio:", inicio.toISOString());
     console.log("⏰ UTC fin:", fin.toISOString());
+    console.log("🔐 Usuario autenticado:", req.user); // <--- esto es clave
 
     const palets = await Palet.find({
       timestamp: { $gte: inicio, $lt: fin },
     });
+
+    console.log("📦 Total palets encontrados:", palets.length);
+    if (palets.length > 0) {
+      console.log("📋 Primer palet:", palets[0]);
+    }
 
     res.json(palets);
   } catch (err) {
