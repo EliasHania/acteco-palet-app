@@ -305,10 +305,12 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
         sheetData.push([`Total cajas de ${tipo}:`, total]);
       });
 
-      sheetData.push(
-        [],
-        ["Total de cajas registradas:", cajasFiltradas.length]
+      const totalCajas = cajasFiltradas.reduce(
+        (acc, caja) => acc + caja.cantidad,
+        0
       );
+      sheetData.push([], ["Total de cajas registradas:", totalCajas]);
+
       sheetData.push(["Total de perchas registradas:", totalPerchas]);
 
       const ws = XLSX.utils.aoa_to_sheet(sheetData);
