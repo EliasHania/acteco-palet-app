@@ -27,6 +27,7 @@ function App() {
   const refrescarPalets = async (fecha = fechaSeleccionada) => {
     try {
       const token = localStorage.getItem("token");
+      console.log("🔑 Token usado:", token);
       const res = await fetch(
         `${import.meta.env.VITE_BACKEND_URL}/api/palets/fecha?fecha=${fecha}`,
         {
