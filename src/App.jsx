@@ -134,7 +134,10 @@ function App() {
             />
           </>
         )}
-        {vista === "cajas" && <CajasForm />}
+        {vista === "cajas" && (
+          <CajasForm fechaSeleccionada={fechaSeleccionada} />
+        )}
+
         {vista === "trabajadoras" && <TrabajadorasManager />}
       </main>
     </div>

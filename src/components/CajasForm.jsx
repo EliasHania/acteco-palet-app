@@ -14,14 +14,14 @@ const perchasPorCaja = {
 
 const tiposDisponibles = Object.keys(perchasPorCaja);
 
-const CajasForm = () => {
+const CajasForm = ({ fechaSeleccionada }) => {
   const [cajas, setCajas] = useState([]);
   const [cantidad, setCantidad] = useState("");
   const [tipoSeleccionado, setTipoSeleccionado] = useState("");
   const [cantidadEliminar, setCantidadEliminar] = useState({});
 
   const encargada = localStorage.getItem("encargada") || "";
-  const fechaHoyISO = new Date().toISOString().split("T")[0];
+  const fechaHoyISO = fechaSeleccionada;
 
   useEffect(() => {
     const cargarCajas = async () => {
