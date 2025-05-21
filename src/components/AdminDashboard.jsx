@@ -84,6 +84,28 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
       </ul>
     </div>
   );
+  const renderCajasPorTurno = (titulo, listaCajas) => {
+    return (
+      <div className="bg-white rounded-xl shadow p-4 w-full">
+        <h3 className="text-lg font-bold text-green-700 mb-3">{titulo}</h3>
+        <ul className="space-y-2 text-gray-800">
+          {listaCajas.length === 0 ? (
+            <li className="text-gray-500">Sin cajas registradas.</li>
+          ) : (
+            listaCajas
+              .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+              .map((caja, index) => (
+                <li key={index} className="flex justify-between border-b pb-1">
+                  <span>{caja.tipo}</span>
+                  <span>{caja.cantidad} cajas</span>
+                  <span>{new Date(caja.timestamp).toLocaleTimeString()}</span>
+                </li>
+              ))
+          )}
+        </ul>
+      </div>
+    );
+  };
 
   const renderResumen = (
     turno,
@@ -368,6 +390,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
             cajasYoana.length,
             true
           )}
+          {renderCajasPorTurno("Detalles de cajas turno Yoana", cajasYoana)}
         </div>
         <div className="space-y-6">
           {renderResumen(
@@ -387,6 +410,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
             cajasLidia.length,
             true
           )}
+          {renderCajasPorTurno("Detalles de cajas turno Lidia", cajasLidia)}
         </div>
       </div>
 
