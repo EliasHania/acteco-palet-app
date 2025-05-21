@@ -300,9 +300,19 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
         resumenTipos[tipo] = (resumenTipos[tipo] || 0) + cantidad;
       });
 
-      sheetData.push([], [], ["Resumen por tipo de caja (solo cantidades):"]);
+      sheetData.push(
+        [],
+        [],
+        ["Resumen por tipo de caja (cantidades y perchas):"]
+      );
       Object.entries(resumenTipos).forEach(([tipo, total]) => {
-        sheetData.push([`Total cajas de ${tipo}:`, total]);
+        const perchas = perchasPorCaja[tipo] || 0;
+        sheetData.push([
+          `Total cajas de ${tipo}:`,
+          total,
+          "Total perchas:",
+          total * perchas,
+        ]);
       });
 
       const totalCajas = cajasFiltradas.reduce(
