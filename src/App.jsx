@@ -56,11 +56,17 @@ function App() {
 
       const visibles = esAdmin
         ? data
-        : data.filter(
-            (p) =>
-              typeof p.registradaPor === "string" &&
-              p.registradaPor.trim().toLowerCase() === encargada
-          );
+        : data.filter((p) => {
+            const limpiado = (p.registradaPor || "")
+              .trim()
+              .toLowerCase()
+              .replace(/[^a-z]/gi, "");
+            const encargadaLimpia = encargada
+              .trim()
+              .toLowerCase()
+              .replace(/[^a-z]/gi, "");
+            return limpiado === encargadaLimpia;
+          });
 
       console.log("🟠 Palets visibles para", encargada, ":", visibles);
 
