@@ -17,8 +17,15 @@ const Navbar = ({ encargada, vista, setVista, onLogout }) => {
           onClick={() => setVista("palets")}
           className={`${botonBase} ${vista === "palets" ? activo : inactivo}`}
         >
-          📦 Palets
+          🧱 Palets
         </button>
+        <button
+          onClick={() => setVista("cajas")}
+          className={`${botonBase} ${vista === "cajas" ? activo : inactivo}`}
+        >
+          📦 Cajas
+        </button>
+
         <button
           onClick={() => setVista("trabajadoras")}
           className={`${botonBase} ${
@@ -26,12 +33,6 @@ const Navbar = ({ encargada, vista, setVista, onLogout }) => {
           }`}
         >
           👥 Trabajadoras
-        </button>
-        <button
-          onClick={() => setVista("cajas")}
-          className={`${botonBase} ${vista === "cajas" ? activo : inactivo}`}
-        >
-          📦 Cajas
         </button>
         <button
           onClick={onLogout}
