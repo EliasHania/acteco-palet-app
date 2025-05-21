@@ -1,3 +1,4 @@
+// AdminDashboard.jsx actualizado: recuento de palets + cajas
 import React, { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 
@@ -9,11 +10,31 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
   );
   const [trabajadoraFiltradaYoana, setTrabajadoraFiltradaYoana] = useState("");
   const [trabajadoraFiltradaLidia, setTrabajadoraFiltradaLidia] = useState("");
+  const [cajas, setCajas] = useState([]);
   const anteriores = useRef([]);
 
   useEffect(() => {
     refrescarPalets(fechaSeleccionada);
+    cargarCajas();
   }, [fechaSeleccionada]);
+
+  const cargarCajas = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(
+        `${
+          import.meta.env.VITE_BACKEND_URL
+        }/api/cajas/fecha?fecha=${fechaSeleccionada}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      const data = await res.json();
+      setCajas(data);
+    } catch (err) {
+      console.error("Error cargando cajas:", err);
+    }
+  };
 
   useEffect(() => {
     anteriores.current = palets.map((p) => p._id);
@@ -22,6 +43,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
   const manejarRefresco = async () => {
     setCargando(true);
     await refrescarPalets(fechaSeleccionada);
+    await cargarCajas();
     setTimeout(() => setCargando(false), 500);
   };
 
@@ -44,17 +66,20 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
     return conteo;
   };
 
-  const renderRecuento = (titulo, recuento, total) => (
+  const renderRecuento = (titulo, recuento, total, esCaja = false) => (
     <div className="bg-white rounded-xl shadow p-6 w-full">
-      <h3 className="text-lg font-bold text-indigo-700 mb-4">📊 {titulo}</h3>
+      <h3 className="text-lg font-bold text-indigo-700 mb-4">
+        {esCaja ? "📦" : "📊"} {titulo}
+      </h3>
       <ul className="space-y-2">
         {Object.entries(recuento).map(([tipo, cantidad]) => (
           <li key={tipo} className="text-gray-700">
-            Total palets de <strong>{tipo}</strong>: {cantidad}
+            Total {esCaja ? "cajas" : "palets"} de <strong>{tipo}</strong>:{" "}
+            {cantidad}
           </li>
         ))}
         <li className="mt-2 text-black font-bold">
-          Total palets registrados: {total}
+          Total {esCaja ? "cajas" : "palets"} registrados: {total}
         </li>
       </ul>
     </div>
@@ -87,7 +112,6 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
         <h3 className="text-lg font-bold mb-3 text-indigo-700">
           Turno de {turno}
         </h3>
-
         <div className="mb-4">
           <label className="text-sm text-gray-700 mr-2">
             Filtrar por trabajadora:
@@ -157,21 +181,25 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
   };
 
   const paletsFiltrados = filtrarPorFecha(palets);
+  const cajasFiltradas = filtrarPorFecha(cajas);
 
-  // Separar palets según quién los registró
   const yoana = paletsFiltrados.filter((p) => p.registradaPor === "yoana");
   const lidia = paletsFiltrados.filter((p) => p.registradaPor === "lidia");
+  const cajasYoana = cajasFiltradas.filter((p) => p.registradaPor === "yoana");
+  const cajasLidia = cajasFiltradas.filter((p) => p.registradaPor === "lidia");
 
   const recuentoYoana = calcularRecuento(yoana);
   const recuentoLidia = calcularRecuento(lidia);
-
+  const recuentoCajasYoana = calcularRecuento(cajasYoana);
+  const recuentoCajasLidia = calcularRecuento(cajasLidia);
   const recuentoTotal = calcularRecuento(paletsFiltrados);
+  const recuentoTotalCajas = calcularRecuento(cajasFiltradas);
 
   const exportarExcelAvanzado = () => {
     const workbook = XLSX.utils.book_new();
     const fechaHoy = new Date().toLocaleDateString("es-ES");
 
-    const generarHoja = (nombreHoja, listaPalets) => {
+    const generarHojaPalets = (nombreHoja, listaPalets) => {
       const sheetData = [
         [`Resumen del turno de ${nombreHoja} – ${fechaHoy}`],
         [],
@@ -202,9 +230,83 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
       XLSX.utils.book_append_sheet(workbook, ws, nombreHoja);
     };
 
-    generarHoja("Yoana", yoana);
-    generarHoja("Lidia", lidia);
-    generarHoja("General", paletsFiltrados);
+    const generarHojaCajas = () => {
+      const sheetData = [
+        [`Resumen de cajas sueltas – ${fechaHoy}`],
+        [],
+        [
+          "Turno",
+          "Tipo de caja",
+          "Cantidad",
+          "Perchas por caja",
+          "Total perchas",
+          "Hora",
+        ],
+      ];
+
+      const perchasPorCaja = {
+        "40x28": 65,
+        "40x11": 175,
+        "46x28": 45,
+        "46x11": 125,
+        "38x11": 175,
+        "32x11": 225,
+        "26x11": 325,
+      };
+
+      const resumenTipos = {};
+      let totalPerchas = 0;
+
+      cajasFiltradas.forEach((caja) => {
+        const tipo = caja.tipo;
+        const cantidad = caja.cantidad;
+        const perchasPorUnidad = perchasPorCaja[tipo] || 0;
+        const totalTipo = cantidad * perchasPorUnidad;
+        totalPerchas += totalTipo;
+
+        const turno = caja.registradaPor === "yoana" ? "Yoana" : "Lidia";
+
+        sheetData.push([
+          turno,
+          tipo,
+          cantidad,
+          perchasPorUnidad,
+          totalTipo,
+          new Date(caja.timestamp).toLocaleTimeString(),
+        ]);
+
+        resumenTipos[tipo] = (resumenTipos[tipo] || 0) + cantidad;
+      });
+
+      sheetData.push([], [], ["Resumen por tipo de caja (solo cantidades):"]);
+      Object.entries(resumenTipos).forEach(([tipo, total]) => {
+        sheetData.push([`Total cajas de ${tipo}:`, total]);
+      });
+
+      sheetData.push(
+        [],
+        ["Total de cajas registradas:", cajasFiltradas.length]
+      );
+      sheetData.push(["Total de perchas registradas:", totalPerchas]);
+
+      const ws = XLSX.utils.aoa_to_sheet(sheetData);
+      ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
+      ws["!cols"] = [
+        { wch: 12 },
+        { wch: 14 },
+        { wch: 10 },
+        { wch: 16 },
+        { wch: 16 },
+        { wch: 12 },
+      ];
+
+      XLSX.utils.book_append_sheet(workbook, ws, "Resumen de cajas");
+    };
+
+    generarHojaPalets("Yoana", yoana);
+    generarHojaPalets("Lidia", lidia);
+    generarHojaPalets("General", paletsFiltrados);
+    generarHojaCajas();
 
     XLSX.writeFile(workbook, `admin-palets-${fechaSeleccionada}.xlsx`);
   };
@@ -256,9 +358,15 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
             setTrabajadoraFiltradaYoana
           )}
           {renderRecuento(
-            "Recuento turno de Yoana",
+            "Recuento turno de Yoana (palets)",
             recuentoYoana,
             yoana.length
+          )}
+          {renderRecuento(
+            "Recuento turno de Yoana (cajas)",
+            recuentoCajasYoana,
+            cajasYoana.length,
+            true
           )}
         </div>
         <div className="space-y-6">
@@ -269,18 +377,30 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
             setTrabajadoraFiltradaLidia
           )}
           {renderRecuento(
-            "Recuento turno de Lidia",
+            "Recuento turno de Lidia (palets)",
             recuentoLidia,
             lidia.length
+          )}
+          {renderRecuento(
+            "Recuento turno de Lidia (cajas)",
+            recuentoCajasLidia,
+            cajasLidia.length,
+            true
           )}
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto mb-10">
+      <div className="max-w-4xl mx-auto mb-10 grid grid-cols-1 md:grid-cols-2 gap-6">
         {renderRecuento(
-          "📊 Recuento general",
+          "📊 Recuento general (palets)",
           recuentoTotal,
           paletsFiltrados.length
+        )}
+        {renderRecuento(
+          "📦 Recuento general (cajas)",
+          recuentoTotalCajas,
+          cajasFiltradas.length,
+          true
         )}
       </div>
 
