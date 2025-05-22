@@ -439,30 +439,30 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
       <div className="flex justify-center gap-4 my-6 max-w-5xl mx-auto">
         <button
           onClick={() => setSeccionActiva("yoana")}
-          className={`px-4 py-2 rounded ${
+          className={`px-4 py-2 rounded cursor-pointer transition duration-200 ${
             seccionActiva === "yoana"
               ? "bg-indigo-600 text-white"
-              : "bg-white border"
+              : "bg-white border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-400"
           }`}
         >
           Turno Yoana
         </button>
         <button
           onClick={() => setSeccionActiva("lidia")}
-          className={`px-4 py-2 rounded ${
+          className={`px-4 py-2 rounded cursor-pointer transition duration-200 ${
             seccionActiva === "lidia"
               ? "bg-indigo-600 text-white"
-              : "bg-white border"
+              : "bg-white border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-400"
           }`}
         >
           Turno Lidia
         </button>
         <button
           onClick={() => setSeccionActiva("general")}
-          className={`px-4 py-2 rounded ${
+          className={`px-4 py-2 rounded cursor-pointer transition duration-200 ${
             seccionActiva === "general"
               ? "bg-indigo-600 text-white"
-              : "bg-white border"
+              : "bg-white border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-400"
           }`}
         >
           Resumen General
@@ -519,5 +519,4 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
     </div>
   );
 };
-
 export default AdminDashboard;
