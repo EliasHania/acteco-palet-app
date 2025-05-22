@@ -1,4 +1,5 @@
 import Caja from "../models/Caja.js";
+import { DateTime } from "luxon";
 
 // ✅ Crear nueva caja
 export const createCaja = async (req, res) => {
@@ -16,18 +17,24 @@ export const createCaja = async (req, res) => {
   }
 };
 
-// ✅ Obtener cajas por fecha
+// ✅ Obtener cajas por fecha con Luxon (zona horaria Madrid)
 export const getCajasPorFecha = async (req, res) => {
   try {
     const { fecha } = req.query;
     if (!fecha) return res.status(400).json({ msg: "Fecha requerida" });
 
-    const [y, m, d] = fecha.split("-").map(Number);
-    const start = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
-    const end = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999));
+    // Luxon: convertir la fecha recibida al inicio y fin del día en zona horaria de Madrid
+    const start = DateTime.fromISO(fecha, { zone: "Europe/Madrid" })
+      .startOf("day")
+      .toUTC();
+    const end = DateTime.fromISO(fecha, { zone: "Europe/Madrid" })
+      .endOf("day")
+      .toUTC();
 
     const isAdmin = req.user.username.toLowerCase() === "admin";
-    const filter = { timestamp: { $gte: start, $lte: end } };
+    const filter = {
+      timestamp: { $gte: start.toJSDate(), $lte: end.toJSDate() },
+    };
 
     if (!isAdmin) {
       filter.registradaPor = req.user.username.toLowerCase();
