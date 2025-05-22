@@ -56,7 +56,6 @@ const PaletTable = ({
 
   const exportarExcel = () => {
     const workbook = XLSX.utils.book_new();
-
     const fechaHoy = new Date().toLocaleDateString("es-ES");
     const titulo = `Resumen del turno de ${
       encargada.charAt(0).toUpperCase() + encargada.slice(1)
@@ -101,11 +100,27 @@ const PaletTable = ({
     });
 
     sheetData.push([], ["Resumen por tipo de palet:"]);
+
+    const perchasPorCaja = {
+      "40x28": 65,
+      "40x11": 175,
+      "46x28": 45,
+      "46x11": 125,
+      "38x11": 175,
+      "32x11": 225,
+      "26x11": 325,
+    };
+
+    let totalPerchas = 0;
+
     Object.entries(resumenPorTipo).forEach(([tipo, cantidad]) => {
       sheetData.push([`Total palets de ${tipo}:`, cantidad]);
+      const perchasTipo = (perchasPorCaja[tipo] || 0) * cantidad * 20;
+      totalPerchas += perchasTipo;
     });
 
     sheetData.push([], ["Total palets registrados:", palets.length]);
+    sheetData.push(["Total perchas estimadas:", totalPerchas]);
 
     const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
     worksheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }];
