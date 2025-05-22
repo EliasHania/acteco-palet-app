@@ -377,7 +377,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
         Panel de Administración – Acteco Productos y Servicios S.L.
       </header>
 
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-4 max-w-5xl mx-auto">
         <div className="flex gap-2 items-center">
           <label htmlFor="fecha" className="font-semibold text-gray-700">
             📅 Selecciona fecha:
@@ -407,7 +407,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
         </div>
       </div>
 
-      <div className="flex justify-center gap-4 my-6">
+      <div className="flex justify-center gap-4 my-6 max-w-5xl mx-auto">
         <button
           onClick={() => setSeccionActiva("yoana")}
           className={`px-4 py-2 rounded ${
@@ -440,55 +440,31 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
         </button>
       </div>
 
-      {seccionActiva === "yoana" && (
-        <div className="space-y-6">
-          {renderResumen(
-            "Yoana",
-            yoana,
-            trabajadoraFiltradaYoana,
-            setTrabajadoraFiltradaYoana
-          )}
-          {renderRecuento(
-            "Recuento turno de Yoana (palets)",
-            recuentoYoana,
-            yoana.length
-          )}
-          {renderRecuento(
-            "Recuento turno de Yoana (cajas)",
-            recuentoCajasYoana,
-            cajasYoana.length,
-            true
-          )}
-          {renderCajasPorTurno("Detalles de cajas turno Yoana", cajasYoana)}
-        </div>
-      )}
+      {seccionActiva === "yoana" &&
+        renderContenidoTurno(
+          "Yoana",
+          yoana,
+          trabajadoraFiltradaYoana,
+          setTrabajadoraFiltradaYoana,
+          recuentoYoana,
+          cajasYoana,
+          recuentoCajasYoana
+        )}
 
-      {seccionActiva === "lidia" && (
-        <div className="space-y-6">
-          {renderResumen(
-            "Lidia",
-            lidia,
-            trabajadoraFiltradaLidia,
-            setTrabajadoraFiltradaLidia
-          )}
-          {renderRecuento(
-            "Recuento turno de Lidia (palets)",
-            recuentoLidia,
-            lidia.length
-          )}
-          {renderRecuento(
-            "Recuento turno de Lidia (cajas)",
-            recuentoCajasLidia,
-            cajasLidia.length,
-            true
-          )}
-          {renderCajasPorTurno("Detalles de cajas turno Lidia", cajasLidia)}
-        </div>
-      )}
+      {seccionActiva === "lidia" &&
+        renderContenidoTurno(
+          "Lidia",
+          lidia,
+          trabajadoraFiltradaLidia,
+          setTrabajadoraFiltradaLidia,
+          recuentoLidia,
+          cajasLidia,
+          recuentoCajasLidia
+        )}
 
       {seccionActiva === "general" && (
-        <>
-          <div className="max-w-4xl mx-auto mb-10 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="mb-10 grid grid-cols-1 md:grid-cols-2 gap-6">
             {renderRecuento(
               "📊 Recuento general (palets)",
               recuentoTotal,
@@ -509,7 +485,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
               📤 Exportar Excel ({fechaSeleccionada})
             </button>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
