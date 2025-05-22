@@ -259,7 +259,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
         sheetData.push([
           `Total palets de ${tipo}:`,
           count,
-          "Total perchas:",
+          `Total perchas de ${tipo}:`,
           totalTipo,
         ]);
       });
@@ -269,7 +269,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
 
       const ws = XLSX.utils.aoa_to_sheet(sheetData);
       ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }];
-      ws["!cols"] = [{ wch: 20 }, { wch: 20 }, { wch: 12 }, { wch: 12 }];
+      ws["!cols"] = [{ wch: 22 }, { wch: 18 }, { wch: 24 }, { wch: 16 }];
       XLSX.utils.book_append_sheet(workbook, ws, nombreHoja);
     };
 
@@ -320,7 +320,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
         sheetData.push([
           `Total cajas de ${tipo}:`,
           total,
-          "Total perchas:",
+          `Total perchas de ${tipo}:`,
           total * perchas,
         ]);
       });
