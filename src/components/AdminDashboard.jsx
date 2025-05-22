@@ -217,13 +217,30 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
     const workbook = XLSX.utils.book_new();
     const fechaHoy = new Date().toLocaleDateString("es-ES");
 
-    const generarHojaPalets = (nombreHoja, listaPalets) => {
+    const perchasPorCaja = {
+      "40x28": 65,
+      "40x11": 175,
+      "46x28": 45,
+      "46x11": 125,
+      "38x11": 175,
+      "32x11": 225,
+      "26x11": 325,
+    };
+
+    const generarHojaPalets = (nombreHoja, listaPalets, esGeneral = false) => {
       const sheetData = [
-        [`Resumen del turno de ${nombreHoja} – ${fechaHoy}`],
+        [
+          esGeneral
+            ? `Resumen General Ambos Turnos – ${fechaHoy}`
+            : `Resumen del turno de ${nombreHoja} – ${fechaHoy}`,
+        ],
         [],
         ["Trabajadora", "Código QR", "Tipo", "Hora"],
       ];
+
       const resumenTipos = {};
+      let totalPerchas = 0;
+
       listaPalets.forEach((p) => {
         sheetData.push([
           p.trabajadora,
@@ -233,11 +250,23 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
         ]);
         resumenTipos[p.tipo] = (resumenTipos[p.tipo] || 0) + 1;
       });
-      sheetData.push([], ["Resumen por tipo:"]);
+
+      sheetData.push([], ["Resumen por tipo de palet (y perchas estimadas):"]);
       Object.entries(resumenTipos).forEach(([tipo, count]) => {
-        sheetData.push([`Total palets de ${tipo}:`, count]);
+        const perchas = perchasPorCaja[tipo] || 0;
+        const totalTipo = count * 20 * perchas; // 20 cajas por palet
+        totalPerchas += totalTipo;
+        sheetData.push([
+          `Total palets de ${tipo}:`,
+          count,
+          "Total perchas:",
+          totalTipo,
+        ]);
       });
+
       sheetData.push([], ["Total palets registrados:", listaPalets.length]);
+      sheetData.push(["Total de perchas estimadas:", totalPerchas]);
+
       const ws = XLSX.utils.aoa_to_sheet(sheetData);
       ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }];
       ws["!cols"] = [{ wch: 20 }, { wch: 20 }, { wch: 12 }, { wch: 12 }];
@@ -257,17 +286,10 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
           "Hora",
         ],
       ];
-      const perchasPorCaja = {
-        "40x28": 65,
-        "40x11": 175,
-        "46x28": 45,
-        "46x11": 125,
-        "38x11": 175,
-        "32x11": 225,
-        "26x11": 325,
-      };
+
       const resumenTipos = {};
       let totalPerchas = 0;
+
       cajasFiltradas.forEach((caja) => {
         const tipo = caja.tipo;
         const cantidad = caja.cantidad;
@@ -275,6 +297,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
         const totalTipo = cantidad * perchasPorUnidad;
         totalPerchas += totalTipo;
         const turno = caja.registradaPor === "yoana" ? "Yoana" : "Lidia";
+
         sheetData.push([
           turno,
           tipo,
@@ -283,8 +306,10 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
           totalTipo,
           new Date(caja.timestamp).toLocaleTimeString(),
         ]);
+
         resumenTipos[tipo] = (resumenTipos[tipo] || 0) + cantidad;
       });
+
       sheetData.push(
         [],
         [],
@@ -299,12 +324,14 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
           total * perchas,
         ]);
       });
+
       const totalCajas = cajasFiltradas.reduce(
         (acc, caja) => acc + caja.cantidad,
         0
       );
       sheetData.push([], ["Total de cajas registradas:", totalCajas]);
       sheetData.push(["Total de perchas registradas:", totalPerchas]);
+
       const ws = XLSX.utils.aoa_to_sheet(sheetData);
       ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
       ws["!cols"] = [
@@ -320,8 +347,9 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
 
     generarHojaPalets("Yoana", yoana);
     generarHojaPalets("Lidia", lidia);
-    generarHojaPalets("General", paletsFiltrados);
+    generarHojaPalets("General", paletsFiltrados, true);
     generarHojaCajas();
+
     XLSX.writeFile(workbook, `admin-palets-${fechaSeleccionada}.xlsx`);
   };
 
