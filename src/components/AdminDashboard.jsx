@@ -129,18 +129,30 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
     });
 
     return (
-      <div className="bg-white rounded-xl shadow p-4 overflow-x-auto w-full">
-        <h3 className="text-lg font-bold mb-3 text-indigo-700">
+      <div className="shadow-md rounded-2xl p-6 border border-green-100 bg-white">
+        <h2 className="text-xl font-semibold mb-2 text-green-600">
+          Resumen por trabajadora
+        </h2>
+        <p className="mb-1 text-green-700 font-medium text-lg">
           Turno de {turno}
-        </h3>
+        </p>
+        <p className="mb-4 text-green-500 text-sm">
+          {new Date(fechaSeleccionada).toLocaleDateString("es-ES", {
+            weekday: "long",
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+          })}
+        </p>
+
         <div className="mb-4">
-          <label className="text-sm text-gray-700 mr-2">
+          <label className="text-sm text-green-700 mr-2">
             Filtrar por trabajadora:
           </label>
           <select
             value={trabajadoraFiltrada}
             onChange={(e) => setTrabajadoraFiltrada(e.target.value)}
-            className="border rounded px-2 py-1 text-sm"
+            className="border border-green-300 rounded px-2 py-1 text-sm"
           >
             <option value="">Todas</option>
             {nombresTrabajadoras.map((nombre) => (
@@ -151,51 +163,55 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
           </select>
         </div>
 
-        {nombresTrabajadoras
-          .filter(
-            (nombre) => !trabajadoraFiltrada || nombre === trabajadoraFiltrada
-          )
-          .map((nombre) => (
-            <div
-              key={nombre}
-              onClick={() =>
-                setAbiertos((prev) => ({ ...prev, [nombre]: !prev[nombre] }))
-              }
-              className="rounded-xl border bg-gray-50 p-4 mb-3 cursor-pointer hover:bg-gray-100 transition"
-            >
-              <div className="w-full text-left font-semibold text-gray-800">
-                {nombre} – {agrupado[nombre].length} palet
-                {agrupado[nombre].length !== 1 && "s"} registrados
+        <div className="space-y-4">
+          {nombresTrabajadoras
+            .filter(
+              (nombre) => !trabajadoraFiltrada || nombre === trabajadoraFiltrada
+            )
+            .map((nombre) => (
+              <div
+                key={nombre}
+                onClick={() =>
+                  setAbiertos((prev) => ({ ...prev, [nombre]: !prev[nombre] }))
+                }
+                className="rounded-xl border bg-green-50 p-4 cursor-pointer hover:bg-green-100 transition border-green-200"
+              >
+                <div className="font-semibold text-green-800 text-base">
+                  {nombre} – {agrupado[nombre].length} palet
+                  {agrupado[nombre].length > 1 ? "s" : ""} registrados
+                </div>
+                {abiertos[nombre] && (
+                  <ul className="mt-3 space-y-2 text-sm text-green-700">
+                    {agrupado[nombre]
+                      .sort(
+                        (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+                      )
+                      .map((p) => (
+                        <li
+                          key={p._id}
+                          className={`bg-white p-3 rounded-xl border border-green-100 shadow-sm flex flex-col sm:flex-row sm:justify-between items-center sm:items-start gap-1 ${
+                            nuevosIds.includes(p._id) &&
+                            !anteriores.current.includes(p._id)
+                              ? "animate-pulse-slow border-green-500"
+                              : ""
+                          }`}
+                        >
+                          <div className="font-semibold text-green-800 text-sm">
+                            QR: {p.codigo || "No disponible"}
+                          </div>
+                          <div className="text-green-600 text-sm">
+                            Tipo: {p.tipo}
+                          </div>
+                          <div className="text-green-500 text-xs italic">
+                            {new Date(p.timestamp).toLocaleTimeString()}
+                          </div>
+                        </li>
+                      ))}
+                  </ul>
+                )}
               </div>
-              {abiertos[nombre] && (
-                <ul className="mt-3 space-y-2 text-sm text-gray-700">
-                  {agrupado[nombre]
-                    .sort(
-                      (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
-                    )
-                    .map((p) => (
-                      <li
-                        key={p._id}
-                        className={`bg-white p-2 rounded-md border text-sm grid grid-cols-3 gap-2 items-center text-center ${
-                          nuevosIds.includes(p._id) &&
-                          !anteriores.current.includes(p._id)
-                            ? "animate-pulse-slow border-green-500"
-                            : ""
-                        }`}
-                      >
-                        <span className="font-medium text-gray-800">
-                          {p.codigo}
-                        </span>
-                        <span className="text-gray-700">{p.tipo}</span>
-                        <span className="text-gray-600">
-                          {new Date(p.timestamp).toLocaleTimeString()}
-                        </span>
-                      </li>
-                    ))}
-                </ul>
-              )}
-            </div>
-          ))}
+            ))}
+        </div>
       </div>
     );
   };
