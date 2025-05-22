@@ -1,4 +1,5 @@
 import Palet from "../models/Palet.js";
+import { DateTime } from "luxon";
 
 // Obtener todos los palets
 export const getPalets = async (req, res) => {
@@ -6,10 +7,12 @@ export const getPalets = async (req, res) => {
 
   let query = {};
   if (date) {
-    const start = new Date(date);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(date);
-    end.setHours(23, 59, 59, 999);
+    const start = DateTime.fromISO(date, { zone: "Europe/Madrid" })
+      .startOf("day")
+      .toJSDate();
+    const end = DateTime.fromISO(date, { zone: "Europe/Madrid" })
+      .endOf("day")
+      .toJSDate();
     query.timestamp = { $gte: start, $lte: end };
   }
 
@@ -71,14 +74,15 @@ export const getPaletsPorFecha = async (req, res) => {
     const fecha = req.query.fecha;
     if (!fecha) return res.status(400).json({ msg: "Fecha requerida" });
 
-    const inicio = new Date(fecha);
-    inicio.setHours(0, 0, 0, 0); // Hora local 00:00
+    const inicio = DateTime.fromISO(fecha, { zone: "Europe/Madrid" })
+      .startOf("day")
+      .toJSDate();
+    const fin = DateTime.fromISO(fecha, { zone: "Europe/Madrid" })
+      .endOf("day")
+      .toJSDate();
 
-    const fin = new Date(fecha);
-    fin.setHours(23, 59, 59, 999); // Hora local 23:59
-
-    console.log("📆 Rango local desde:", inicio.toISOString());
-    console.log("📆 Rango local hasta:", fin.toISOString());
+    console.log("📆 Inicio Madrid:", inicio.toISOString());
+    console.log("📆 Fin Madrid:", fin.toISOString());
 
     const palets = await Palet.find({
       timestamp: { $gte: inicio, $lte: fin },
