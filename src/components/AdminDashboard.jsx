@@ -370,7 +370,36 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
 
     XLSX.writeFile(workbook, `admin-palets-${fechaSeleccionada}.xlsx`);
   };
-
+  const renderContenidoTurno = (
+    nombre,
+    palets,
+    trabajadoraFiltrada,
+    setTrabajadoraFiltrada,
+    recuentoPalets,
+    cajas,
+    recuentoCajas
+  ) => (
+    <div className="space-y-6 max-w-5xl mx-auto">
+      {renderResumen(
+        nombre,
+        palets,
+        trabajadoraFiltrada,
+        setTrabajadoraFiltrada
+      )}
+      {renderRecuento(
+        `Recuento turno de ${nombre} (palets)`,
+        recuentoPalets,
+        palets.length
+      )}
+      {renderRecuento(
+        `Recuento turno de ${nombre} (cajas)`,
+        recuentoCajas,
+        cajas.length,
+        true
+      )}
+      {renderCajasPorTurno(`Detalles de cajas turno ${nombre}`, cajas)}
+    </div>
+  );
   return (
     <div className="min-h-screen bg-gray-100 text-gray-800 p-6">
       <header className="text-center text-3xl font-bold text-indigo-700 mb-6">
