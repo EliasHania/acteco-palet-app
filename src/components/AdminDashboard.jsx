@@ -176,16 +176,18 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
                     .map((p) => (
                       <li
                         key={p._id}
-                        className={`bg-white p-2 rounded-md border text-sm flex justify-between ${
+                        className={`bg-white p-2 rounded-md border text-sm grid grid-cols-3 gap-2 items-center text-center ${
                           nuevosIds.includes(p._id) &&
                           !anteriores.current.includes(p._id)
                             ? "animate-pulse-slow border-green-500"
                             : ""
                         }`}
                       >
-                        <span>{p.codigo}</span>
-                        <span>{p.tipo}</span>
-                        <span>
+                        <span className="font-medium text-gray-800">
+                          {p.codigo}
+                        </span>
+                        <span className="text-gray-700">{p.tipo}</span>
+                        <span className="text-gray-600">
                           {new Date(p.timestamp).toLocaleTimeString()}
                         </span>
                       </li>
