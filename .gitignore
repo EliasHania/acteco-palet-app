@@ -16,25 +16,83 @@ dist/
 build/
 dist-ssr/
 .vite/
+.vitepress/
+out/
+public/build/
+.svelte-kit/
 
-# Env files
+# Coverage / test outputs
+coverage/
+.nyc_output/
+
+# Temp files
+tmp/
+temp/
+*.tmp
+
+# Env files (do NOT commit secrets)
+.env
+.env.local
+.env.*.local
 server/.env
+# keep example envs tracked
+!.env.example
 
 # System files
 .DS_Store
+Thumbs.db
 
-# IDE/editor files
+# IDE / editor
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+*.iml
 
-# Optional: OS-specific
-Thumbs.db
+# OS-specific / Swap
+*~
+*.swp
+.Spotlight-V100
+.Trashes
 
-# Ignorar el script de usuarios precargados
+# Build artefacts / caches
+.cache/
+.pnpm-store/
+.yarn/cache/
+.eslintcache
+
+# Package managers
+package-lock.json
+.pnpm-debug.log
+
+# Certificates / keys
+*.pem
+*.key
+*.crt
+
+# Archives / backups
+*.zip
+*.tar.gz
+*.bak
+backup*
+*.sql
+
+# Logs again (some tools)
+npm-debug.log*
+yarn-debug.log*
+
+# Ignore the preloaded users script used for seeding (if you want it ignored)
 server/scripts/seedUsers.js
+
+# Misc
+dist-ssr/
+.vscode-server/
+.vscode-test/
+.idea/
+
+# Optional: lockfile if you want to keep it out (uncomment if desired)
+# yarn.lock
