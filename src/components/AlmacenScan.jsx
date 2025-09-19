@@ -264,9 +264,13 @@ export default function AlmacenScan({ onLogout }) {
             </span>
             <button
               onClick={onLogout}
-              className="px-3 py-1.5 rounded-lg text-sm bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100"
+              className="px-3 py-1 rounded-full text-sm font-medium
+             bg-rose-700/60 text-white border border-rose-400/40 
+             backdrop-blur-sm hover:bg-rose-700/80 
+             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300/60
+             transition-colors shadow-sm"
             >
-              Cerrar sesión
+              <span className="mr-1">🔒</span> Cerrar sesión
             </button>
           </div>
         </div>
