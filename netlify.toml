@@ -6,8 +6,8 @@
   Referrer-Policy = "strict-origin-when-cross-origin"
   Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
 
-  # PRUEBA primero en Report-Only
-  Content-Security-Policy-Report-Only = """
+  # CSP en ENFORCEMENT (ya no Report-Only)
+  Content-Security-Policy = """
     default-src 'self';
     script-src 'self';
     connect-src 'self' https://acteco-palet-app.onrender.com wss://acteco-palet-app.onrender.com;
@@ -16,10 +16,11 @@
     font-src 'self' data:;
     object-src 'none';
     base-uri 'self';
-    frame-ancestors 'none'
+    frame-ancestors 'none';
+    frame-src 'self'
   """
 
-  # Endurecimiento extra (permitimos cámara en origen por html5-qrcode)
+  # Endurecimiento extra (necesitas cámara para html5-qrcode)
   Permissions-Policy = "geolocation=(), camera=(self), microphone=()"
   Cross-Origin-Opener-Policy = "same-origin"
   Cross-Origin-Resource-Policy = "same-origin"
