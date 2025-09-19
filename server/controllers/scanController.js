@@ -1,46 +1,69 @@
 // server/controllers/scanController.js
 import mongoose from "mongoose";
-import Palet from "../models/Palet.js"; // ya lo tienes
+import Palet from "../models/Palet.js";
+import { DateTime } from "luxon";
+
+// roles que pueden escanear
+const ALLOWED_ROLES = new Set(["admin", "yoana", "lidia", "almacen"]);
+
+// normaliza QR (acepta "QR: 1080-21", espacios, etc.)
+const normalizeQR = (raw) =>
+  String(raw || "")
+    .trim()
+    .replace(/^QR[:\s-]*/i, "")
+    .replace(/\s+/g, "")
+    .toUpperCase();
+
+// rango de HOY en Europe/Madrid -> UTC
+const hoyMadridUtc = () => {
+  const start = DateTime.now().setZone("Europe/Madrid").startOf("day").toUTC();
+  const end = DateTime.now().setZone("Europe/Madrid").endOf("day").toUTC();
+  return { startUtc: start.toJSDate(), endUtc: end.toJSDate() };
+};
 
 export async function scanQr(req, res) {
   try {
-    // quién puede escanear
-    const allowed = ["admin", "yoana", "lidia", "almacen"];
-    if (!allowed.includes(req.user?.role)) {
+    if (!ALLOWED_ROLES.has(req.user?.role)) {
       return res.status(403).json({ error: "forbidden" });
     }
 
-    const codigo = String(req.body?.qr || "").trim();
+    const codigoRaw = req.body?.qr;
+    const codigo = normalizeQR(codigoRaw);
     if (!codigo) return res.status(400).json({ error: "invalid_qr" });
 
-    // prefijo de hoy (YYYY-MM-DD) — tu app guarda timestamp como ISO string
-    const hoy = new Date().toISOString().split("T")[0];
+    const { startUtc, endUtc } = hoyMadridUtc();
 
-    // ¿Existe ese palet hoy?
+    // solo palets del día en curso y registrados por Yoana o Lidia
     const existente = await Palet.findOne({
-      codigo,
-      timestamp: { $regex: `^${hoy}` },
+      codigo: { $in: [codigo, new RegExp(`(^|\\b)${codigo}\\b`, "i")] },
+      registradaPor: { $in: [/^yoana$/i, /^lidia$/i] },
+      timestamp: { $gte: startUtc, $lte: endUtc },
     }).lean();
 
-    // registrar el escaneo (colección ligera, sin modelo)
-    const db = mongoose.connection.db;
-    await db.collection("scans").insertOne({
-      codigo,
-      userId: new mongoose.Types.ObjectId(req.user._id),
-      role: req.user.role,
-      found: !!existente,
-      paletId: existente ? existente._id : null,
-      createdAt: new Date(),
-    });
-
-    // si NO existe, crear incidente para que lo vea la encargada
-    if (!existente) {
-      await db.collection("incidents").insertOne({
+    // logging opcional de escaneos
+    try {
+      const db = mongoose.connection.db;
+      await db.collection("scans").insertOne({
         codigo,
         userId: new mongoose.Types.ObjectId(req.user._id),
-        status: "new",
+        role: req.user.role,
+        found: !!existente,
+        paletId: existente ? existente._id : null,
         createdAt: new Date(),
       });
+    } catch {}
+
+    // incidente si no existe (opcional)
+    if (!existente) {
+      try {
+        const db = mongoose.connection.db;
+        await db.collection("incidents").insertOne({
+          codigo,
+          userId: new mongoose.Types.ObjectId(req.user._id),
+          status: "new",
+          createdAt: new Date(),
+        });
+      } catch {}
       return res.json({ ok: true, registered: false });
     }
 
