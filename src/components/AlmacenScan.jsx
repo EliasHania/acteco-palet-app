@@ -70,6 +70,11 @@ export default function AlmacenScan({ onLogout }) {
     } catch {
       setStatus({ text: "Error al comprobar", type: "error" });
     }
+
+    // 🔔 Resetear al estado "idle" después de 1 segundo
+    setTimeout(() => {
+      setStatus({ text: "Apunta al código…", type: "idle" });
+    }, 1000);
   };
 
   const startCamera = async () => {
