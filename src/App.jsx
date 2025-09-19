@@ -7,6 +7,7 @@ import AdminDashboard from "./components/AdminDashboard";
 import CajasForm from "./components/CajasForm";
 import Navbar from "./components/Navbar";
 import { io } from "socket.io-client";
+import AlmacenScan from "./components/AlmacenScan";
 
 const socket = io(import.meta.env.VITE_BACKEND_URL);
 
@@ -17,16 +18,40 @@ function App() {
   const [esAdmin, setEsAdmin] = useState(
     () => localStorage.getItem("esAdmin") === "true"
   );
+  const [role, setRole] = useState(() => localStorage.getItem("role") || "");
+
   const [palets, setPalets] = useState([]);
   const [nuevosIds, setNuevosIds] = useState([]);
   const [fechaSeleccionada, setFechaSeleccionada] = useState(() =>
     new Date().toLocaleDateString("sv-SE")
   );
-
   const [vista, setVista] = useState("palets");
+
+  // Decodificador seguro para base64url del JWT
+  const b64urlToJson = (b64url) => {
+    try {
+      const b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
+      const pad = b64.length % 4 === 2 ? "==" : b64.length % 4 === 3 ? "=" : "";
+      return JSON.parse(atob(b64 + pad));
+    } catch {
+      return {};
+    }
+  };
+
+  const getRoleFromToken = () => {
+    const t = localStorage.getItem("token");
+    if (!t) return "";
+    const parts = t.split(".");
+    if (parts.length < 2) return "";
+    const payload = b64urlToJson(parts[1]);
+    return payload?.role || "";
+  };
 
   const refrescarPalets = async (fecha = fechaSeleccionada) => {
     try {
+      // si es almacen, no tiene sentido refrescar listados
+      if (role === "almacen") return;
+
       const token = localStorage.getItem("token");
       const res = await fetch(
         `${import.meta.env.VITE_BACKEND_URL}/api/palets/fecha?fecha=${fecha}`,
@@ -65,14 +90,24 @@ function App() {
     }
   };
 
+  // Solo escucha socket y refresca si NO es rol almacen
   useEffect(() => {
-    if (encargada) {
+    if (encargada && role !== "almacen") {
       const handleNuevoPalet = () => refrescarPalets(fechaSeleccionada);
       refrescarPalets(fechaSeleccionada);
       socket.on("nuevoPalet", handleNuevoPalet);
       return () => socket.off("nuevoPalet", handleNuevoPalet);
     }
-  }, [encargada, fechaSeleccionada]);
+  }, [encargada, fechaSeleccionada, role]);
+
+  // Al montar, intenta leer el rol actual del token
+  useEffect(() => {
+    const r = getRoleFromToken();
+    if (r) {
+      setRole(r);
+      localStorage.setItem("role", r);
+    }
+  }, []);
 
   const handleLogin = (nombre, isAdmin) => {
     const nombreLimpio = nombre.trim().toLowerCase();
@@ -80,19 +115,31 @@ function App() {
     setEsAdmin(isAdmin);
     localStorage.setItem("encargada", nombreLimpio);
     localStorage.setItem("esAdmin", isAdmin);
+
+    const r = getRoleFromToken();
+    setRole(r);
+    localStorage.setItem("role", r);
+
     refrescarPalets(fechaSeleccionada);
   };
 
   const handleLogout = () => {
     setEncargada("");
     setEsAdmin(false);
+    setRole("");
     setPalets([]);
     localStorage.removeItem("encargada");
     localStorage.removeItem("esAdmin");
     localStorage.removeItem("token");
+    localStorage.removeItem("role");
   };
 
   if (!encargada) return <Login onLogin={handleLogin} />;
+
+  // Vista exclusiva para el rol "almacen": solo el escáner
+  if (role === "almacen") {
+    return <AlmacenScan />;
+  }
 
   if (esAdmin) {
     return (
@@ -134,6 +181,7 @@ function App() {
             />
           </>
         )}
+
         {vista === "cajas" && (
           <CajasForm fechaSeleccionada={fechaSeleccionada} />
         )}

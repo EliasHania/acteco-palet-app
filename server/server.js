@@ -9,6 +9,7 @@ import paletRoutes from "./routes/palets.js";
 import authRoutes from "./routes/auth.js";
 import trabajadoraRoutes from "./routes/trabajadoras.js";
 import cajaRoutes from "./routes/cajas.js";
+import scansRoutes from "./routes/scans.js";
 
 dotenv.config();
 
@@ -69,3 +70,6 @@ server.listen(PORT, () => {
 });
 
 app.use("/api/cajas", cajaRoutes);
+
+// ruta de escaneo
+app.use("/api", scansRoutes);
