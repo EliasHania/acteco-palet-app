@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { authFetch } from "../authFetch";
 
@@ -21,6 +21,11 @@ export default function AlmacenScan({ onLogout }) {
   const lastCodeRef = useRef({ code: "", ts: 0 });
   const [manualQR, setManualQR] = useState("");
 
+  // refs para centrar fondo radial en el elemento visible (CTA o visor)
+  const pageRef = useRef(null);
+  const anchorRef = useRef(null); // apunta al CTA o al visor según estado
+
+  // ========= helpers
   const beep = () => {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -92,6 +97,13 @@ export default function AlmacenScan({ onLogout }) {
       startedRef.current = true;
 
       const video = document.querySelector(`#${readerId} video`);
+      if (video) {
+        // evitar rarezas de layout en iOS
+        video.style.display = "block";
+        video.style.objectFit = "cover";
+        video.setAttribute("playsinline", "true");
+      }
+
       const stream = video?.srcObject;
       const track = stream?.getVideoTracks?.()[0];
       mediaTrackRef.current = track || null;
@@ -137,6 +149,7 @@ export default function AlmacenScan({ onLogout }) {
     setCameraActive(true);
   };
 
+  // Iniciar la cámara cuando el visor ya existe
   useEffect(() => {
     if (!cameraActive || !wantStartRef.current) return;
     const el = document.getElementById(readerId);
@@ -149,6 +162,7 @@ export default function AlmacenScan({ onLogout }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraActive]);
 
+  // Limpieza
   useEffect(
     () => () => {
       stopCamera();
@@ -156,6 +170,7 @@ export default function AlmacenScan({ onLogout }) {
     []
   ); // cleanup
 
+  // Torch
   const toggleTorch = async () => {
     const track = mediaTrackRef.current;
     if (!track) return;
@@ -168,6 +183,32 @@ export default function AlmacenScan({ onLogout }) {
     } catch {}
   };
 
+  // ===== centrar “aura” del fondo en el ancla (CTA o visor)
+  const updateRadialCenter = () => {
+    const root = pageRef.current;
+    const anchor = anchorRef.current;
+    if (!root || !anchor) return;
+    const r = root.getBoundingClientRect();
+    const a = anchor.getBoundingClientRect();
+    const cx = ((a.left + a.width / 2 - r.left) / r.width) * 100;
+    const cy = ((a.top + a.height / 2 - r.top) / r.height) * 100;
+    root.style.setProperty("--cx", `${cx}%`);
+    root.style.setProperty("--cy", `${cy}%`);
+  };
+
+  useLayoutEffect(() => {
+    updateRadialCenter();
+    const onResize = () => updateRadialCenter();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraActive]); // cambia ancla cuando pasamos de CTA a visor
+
+  // ===== estilos por estado
   const borderByType =
     status.type === "ok"
       ? "ring-4 ring-green-500"
@@ -194,12 +235,14 @@ export default function AlmacenScan({ onLogout }) {
 
   return (
     <div
-      className="min-h-screen relative overflow-hidden text-emerald-50 flex flex-col items-center"
-      // Fondo: base green-600 + RADIAL centrado (círculo) que crea sinergia con visor/CTA
+      ref={pageRef}
+      className="min-h-screen relative overflow-hidden text-emerald-50 flex flex-col"
+      // Fondo: degradado lineal + radial centrado en --cx/--cy
       style={{
         background: `
-          radial-gradient(circle at 50% 38%, rgba(16,185,129,0.40) 0%, rgba(16,185,129,0.28) 22%, rgba(16,185,129,0.16) 45%, rgba(16,185,129,0.08) 60%, transparent 72%),
-          linear-gradient(180deg, rgba(5,150,105,0.95) 0%, rgba(22,163,74,0.92) 30%, rgba(34,197,94,0.88) 70%, rgba(240,253,244,0.85) 100%)
+          radial-gradient(circle at var(--cx,50%) var(--cy,40%), rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.10) 35%, rgba(255,255,255,0.02) 65%, transparent 75%),
+          radial-gradient(circle at var(--cx,50%) var(--cy,40%), rgba(16,185,129,0.45) 0%, rgba(16,185,129,0.28) 30%, rgba(16,185,129,0.12) 55%, transparent 70%),
+          linear-gradient(180deg, rgba(5,150,105,0.98) 0%, rgba(22,163,74,0.94) 35%, rgba(34,197,94,0.90) 75%, rgba(240,253,244,0.88) 100%)
         `,
       }}
     >
@@ -224,14 +267,13 @@ export default function AlmacenScan({ onLogout }) {
         </div>
       </div>
 
-      {/* BODY (centrado) */}
-      <main className="w-full max-w-3xl mx-auto px-4 sm:px-6 pb-12">
-        <div className="mt-8 flex flex-col items-center">
-          {/* ===== CTA circular BLANCO (cámara cerrada) ===== */}
+      {/* BODY centrado con grid */}
+      <main className="w-full max-w-3xl mx-auto px-4 sm:px-6 pb-12 grow grid place-items-center">
+        <div className="w-full flex flex-col items-center">
+          {/* ===== CTA circular (cámara cerrada) ===== */}
           {!cameraActive && !cameraError && (
-            <div className="flex flex-col items-center gap-5">
+            <div ref={anchorRef} className="flex flex-col items-center gap-5">
               <div className="relative">
-                {/* anillo pulso verde */}
                 <span className="absolute inset-0 rounded-full animate-ping bg-white/30"></span>
                 <button
                   onClick={handleOpen}
@@ -239,7 +281,6 @@ export default function AlmacenScan({ onLogout }) {
                   aria-label="Abrir cámara"
                   style={{ boxShadow: "0 18px 40px rgba(255,255,255,.20)" }}
                 >
-                  {/* icono cámara SVG centrado */}
                   <svg
                     width="36"
                     height="36"
@@ -256,30 +297,31 @@ export default function AlmacenScan({ onLogout }) {
             </div>
           )}
 
-          {/* ===== VISOR ACTIVO: card BLANCA con glow verde ===== */}
+          {/* ===== VISOR activo (card blanca centrada) ===== */}
           {cameraActive && (
             <div className="w-full flex justify-center">
               <div
+                ref={anchorRef}
                 className={`relative ${borderByType} rounded-2xl overflow-hidden shadow-[0_25px_100px_-30px_rgba(16,185,129,.55)] bg-white`}
                 style={{ width: 340, height: 340 }}
               >
-                {/* cerrar */}
+                {/* Cerrar (rojo) */}
                 <button
                   onClick={stopCamera}
-                  className="absolute right-3 top-3 z-20 px-3 py-1.5 rounded-lg text-sm 
-             bg-rose-600 hover:bg-rose-700 text-white font-medium 
-             shadow-md border border-rose-700/30"
+                  className="absolute right-3 top-3 z-20 px-3 py-1.5 rounded-lg text-sm
+                             bg-rose-600 hover:bg-rose-700 text-white font-medium
+                             shadow-md border border-rose-700/30"
                 >
                   Cerrar cámara
                 </button>
 
-                {/* visor */}
+                {/* Contenedor del lector */}
                 <div
                   id={readerId}
                   className="relative w-[340px] h-[340px] bg-black rounded-2xl"
                 />
 
-                {/* esquinas (blancas sobre el vídeo) */}
+                {/* Esquinas blancas */}
                 {[
                   "top-0 left-0",
                   "top-0 right-0",
@@ -294,7 +336,7 @@ export default function AlmacenScan({ onLogout }) {
                   />
                 ))}
 
-                {/* estado */}
+                {/* Estado */}
                 <div className="pointer-events-none absolute inset-0 flex items-end justify-center p-3">
                   <div
                     className={`px-3 py-2 rounded-lg text-white text-sm font-semibold ${badgeClasses} backdrop-blur shadow`}
@@ -306,7 +348,7 @@ export default function AlmacenScan({ onLogout }) {
             </div>
           )}
 
-          {/* Controles (linterna + nota) */}
+          {/* Controles bajo visor */}
           {cameraActive && (
             <div className="mt-4 flex items-center justify-center gap-3">
               {showTorch && (
@@ -317,7 +359,7 @@ export default function AlmacenScan({ onLogout }) {
                   {torchOn ? "Apagar linterna" : "Encender linterna"}
                 </button>
               )}
-              <span className="text-xs text-white/80">
+              <span className="text-xs text-white/85">
                 Conexión segura requerida (https) salvo en{" "}
                 <span className="font-mono">localhost</span>.
               </span>
@@ -364,9 +406,9 @@ export default function AlmacenScan({ onLogout }) {
             </div>
           )}
 
-          {/* Divider + foot */}
+          {/* Footer */}
           <div className="w-full mt-10 border-t border-white/25" />
-          <div className="pt-3 text-xs text-white/85 text-center">
+          <div className="pt-3 text-xs text-white/90 text-center">
             Acteco • Escáner de palets · Feedback visual en tiempo real
           </div>
         </div>
