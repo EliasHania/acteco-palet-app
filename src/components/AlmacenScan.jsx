@@ -9,7 +9,7 @@ export default function AlmacenScan({ onLogout }) {
 
   const initializedRef = useRef(false);
   const startedRef = useRef(false);
-  const wantStartRef = useRef(false); // <- marca intención de iniciar tras render
+  const wantStartRef = useRef(false);
 
   const [cameraActive, setCameraActive] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
@@ -67,7 +67,6 @@ export default function AlmacenScan({ onLogout }) {
     }
   };
 
-  // Inicia la cámara (requiere que el contenedor ya exista en el DOM)
   const startCamera = async () => {
     setCameraError(null);
     setStatus({ text: "Inicializando cámara…", type: "loading" });
@@ -76,7 +75,6 @@ export default function AlmacenScan({ onLogout }) {
 
     const container = document.getElementById(readerId);
     if (!container) {
-      // Si por lo que sea aún no está en el DOM, cancela y reintenta después
       initializedRef.current = false;
       return;
     }
@@ -105,14 +103,12 @@ export default function AlmacenScan({ onLogout }) {
         message: err?.message || String(err),
       });
       setStatus({ text: "No se pudo abrir la cámara", type: "error" });
-      // deja listo para reintentar
       initializedRef.current = false;
       startedRef.current = false;
       setCameraActive(false);
     }
   };
 
-  // Cierra la cámara y limpia
   const stopCamera = async () => {
     setTorchOn(false);
     try {
@@ -133,22 +129,18 @@ export default function AlmacenScan({ onLogout }) {
     setStatus({ text: "Apunta al código…", type: "idle" });
   };
 
-  // CTA: marcar intención y activar la vista; el efecto arrancará la cámara
   const handleOpen = () => {
     navigator.vibrate?.(20);
     setCameraError(null);
     setStatus({ text: "Inicializando cámara…", type: "loading" });
     wantStartRef.current = true;
-    setCameraActive(true); // esto hace que se renderice el <div id=...>
+    setCameraActive(true);
   };
 
-  // Cuando el visor ya está montado, inicia la cámara
   useEffect(() => {
     if (!cameraActive || !wantStartRef.current) return;
-
     const el = document.getElementById(readerId);
     if (!el) {
-      // Asegura que el DOM está listo
       requestAnimationFrame(() => setCameraActive((x) => x));
       return;
     }
@@ -157,13 +149,12 @@ export default function AlmacenScan({ onLogout }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraActive]);
 
-  // Limpieza al desmontar
-  useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       stopCamera();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    },
+    []
+  ); // cleanup
 
   const toggleTorch = async () => {
     const track = mediaTrackRef.current;
@@ -179,134 +170,154 @@ export default function AlmacenScan({ onLogout }) {
 
   const borderByType =
     status.type === "ok"
-      ? "ring-4 ring-emerald-500"
+      ? "ring-4 ring-green-500"
       : status.type === "warn"
       ? "ring-4 ring-amber-500"
       : status.type === "error"
       ? "ring-4 ring-rose-500"
       : status.type === "loading"
-      ? "ring-4 ring-emerald-400"
-      : "ring-2 ring-emerald-300";
+      ? "ring-4 ring-green-400"
+      : "ring-2 ring-green-300";
 
   const badgeClasses =
     status.type === "ok"
-      ? "bg-emerald-600/90"
+      ? "bg-green-600/90"
       : status.type === "warn"
       ? "bg-amber-600/90"
       : status.type === "error"
       ? "bg-rose-600/90"
       : status.type === "loading"
-      ? "bg-emerald-700/90"
-      : "bg-emerald-800/80";
+      ? "bg-green-700/90"
+      : "bg-green-800/80";
 
   const showTorch = !!mediaTrackRef.current?.getCapabilities?.()?.torch;
 
   return (
     <div
-      className="min-h-screen relative overflow-hidden text-emerald-950 flex flex-col items-center"
+      className="min-h-screen relative overflow-hidden text-emerald-50 flex flex-col items-center"
+      // Fondo: base green-600 + RADIAL centrado (círculo) que crea sinergia con visor/CTA
       style={{
-        background:
-          "radial-gradient(1200px 600px at 20% -10%, #d1fae5 0%, rgba(209,250,229,0) 60%), radial-gradient(1200px 600px at 120% 110%, #bbf7d0 0%, rgba(187,247,208,0) 60%), linear-gradient(180deg,#ecfdf5 0%, #e6f7ee 60%, #eafaf3 100%)",
+        background: `
+          radial-gradient(circle at 50% 38%, rgba(16,185,129,0.40) 0%, rgba(16,185,129,0.28) 22%, rgba(16,185,129,0.16) 45%, rgba(16,185,129,0.08) 60%, transparent 72%),
+          linear-gradient(180deg, rgba(5,150,105,0.95) 0%, rgba(22,163,74,0.92) 30%, rgba(34,197,94,0.88) 70%, rgba(240,253,244,0.85) 100%)
+        `,
       }}
     >
-      {/* Header */}
-      <header className="w-full max-w-5xl mx-auto px-6 pt-10 pb-4 flex items-center justify-between">
-        <h1 className="text-3xl font-semibold tracking-tight">
-          Escáner — <span className="text-emerald-700">Turno de Almacén</span>
-        </h1>
-        <div className="flex items-center gap-2">
-          <span className="px-3 py-1 rounded-full text-sm bg-emerald-100 text-emerald-800 border border-emerald-200">
-            Modo almacén
-          </span>
-          <button
-            onClick={onLogout}
-            className="ml-2 px-3 py-1.5 rounded-lg text-sm bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100"
-          >
-            Cerrar sesión
-          </button>
+      {/* HEADER CARD */}
+      <div className="w-full max-w-3xl mx-auto px-4 sm:px-6 pt-6">
+        <div className="rounded-2xl border border-white/20 bg-white/15 backdrop-blur-md shadow-lg px-5 sm:px-7 py-4 flex items-center justify-between">
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white">
+            <span className="mr-1 opacity-90">Escáner —</span>
+            <span className="text-lime-200">Turno de Almacén</span>
+          </h1>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 rounded-full text-sm bg-white/20 text-white border border-white/25">
+              Modo almacén
+            </span>
+            <button
+              onClick={onLogout}
+              className="px-3 py-1.5 rounded-lg text-sm bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100"
+            >
+              Cerrar sesión
+            </button>
+          </div>
         </div>
-      </header>
+      </div>
 
-      <main className="w-full max-w-5xl mx-auto px-6 pb-10">
-        <div className="mx-auto flex flex-col items-center gap-6">
-          {/* ===== INACTIVO: Botón circular con pulso ===== */}
+      {/* BODY (centrado) */}
+      <main className="w-full max-w-3xl mx-auto px-4 sm:px-6 pb-12">
+        <div className="mt-8 flex flex-col items-center">
+          {/* ===== CTA circular BLANCO (cámara cerrada) ===== */}
           {!cameraActive && !cameraError && (
             <div className="flex flex-col items-center gap-5">
               <div className="relative">
-                <span className="absolute inset-0 rounded-full animate-ping bg-emerald-400/30"></span>
+                {/* anillo pulso verde */}
+                <span className="absolute inset-0 rounded-full animate-ping bg-white/30"></span>
                 <button
                   onClick={handleOpen}
-                  className="relative w-24 h-24 rounded-full bg-emerald-600 text-white shadow-xl active:scale-95 transition flex items-center justify-center"
-                  style={{ boxShadow: "0 12px 30px rgba(16,185,129,.45)" }}
+                  className="relative w-28 h-28 rounded-full bg-white text-green-600 shadow-2xl active:scale-95 transition flex items-center justify-center"
+                  aria-label="Abrir cámara"
+                  style={{ boxShadow: "0 18px 40px rgba(255,255,255,.20)" }}
                 >
-                  <span className="text-2xl">🎥</span>
+                  {/* icono cámara SVG centrado */}
+                  <svg
+                    width="36"
+                    height="36"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M9.5 7 11 5h2l1.5 2H18a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10a3 3 0 0 1 3-3h3.5zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0-2.2A1.8 1.8 0 1 1 12 11a1.8 1.8 0 0 1 0 3.8z" />
+                  </svg>
                 </button>
               </div>
-              <div className="text-sm text-emerald-900/70 font-medium">
+              <div className="text-[15px] text-white/90 font-medium">
                 Toca para abrir la cámara
               </div>
             </div>
           )}
 
-          {/* ===== ACTIVO: Visor + Cerrar ===== */}
+          {/* ===== VISOR ACTIVO: card BLANCA con glow verde ===== */}
           {cameraActive && (
-            <div
-              className={`relative ${borderByType} rounded-2xl overflow-hidden shadow-[0_20px_80px_-30px_rgba(16,185,129,.35)]`}
-              style={{ width: 360, height: 360 }}
-            >
-              {/* Cerrar cámara */}
-              <button
-                onClick={stopCamera}
-                className="absolute right-3 top-3 z-20 px-3 py-1.5 rounded-lg text-sm bg-white/90 hover:bg-white border border-slate-200 shadow"
-              >
-                Cerrar cámara
-              </button>
-
-              {/* Visor */}
+            <div className="w-full flex justify-center">
               <div
-                id={readerId}
-                className="relative w-[360px] h-[360px] bg-black"
-              />
-
-              {/* Esquinas */}
-              {[
-                "top-0 left-0",
-                "top-0 right-0",
-                "bottom-0 left-0",
-                "bottom-0 right-0",
-              ].map((pos, i) => (
-                <span
-                  key={i}
-                  className={`pointer-events-none absolute ${pos} w-12 h-12 border-4 border-emerald-400/90 rounded-md
-                    ${pos.includes("left") ? "border-r-0" : "border-l-0"}
-                    ${pos.includes("top") ? "border-b-0" : "border-t-0"}`}
-                />
-              ))}
-
-              {/* Estado */}
-              <div className="pointer-events-none absolute inset-0 flex items-end justify-center p-3">
-                <div
-                  className={`px-3 py-2 rounded-lg text-white text-sm font-semibold ${badgeClasses} backdrop-blur shadow`}
+                className={`relative ${borderByType} rounded-2xl overflow-hidden shadow-[0_25px_100px_-30px_rgba(16,185,129,.55)] bg-white`}
+                style={{ width: 340, height: 340 }}
+              >
+                {/* cerrar */}
+                <button
+                  onClick={stopCamera}
+                  className="absolute right-3 top-3 z-20 px-3 py-1.5 rounded-lg text-sm 
+             bg-rose-600 hover:bg-rose-700 text-white font-medium 
+             shadow-md border border-rose-700/30"
                 >
-                  {status.text}
+                  Cerrar cámara
+                </button>
+
+                {/* visor */}
+                <div
+                  id={readerId}
+                  className="relative w-[340px] h-[340px] bg-black rounded-2xl"
+                />
+
+                {/* esquinas (blancas sobre el vídeo) */}
+                {[
+                  "top-0 left-0",
+                  "top-0 right-0",
+                  "bottom-0 left-0",
+                  "bottom-0 right-0",
+                ].map((pos, i) => (
+                  <span
+                    key={i}
+                    className={`pointer-events-none absolute ${pos} w-12 h-12 border-4 border-white rounded-md
+                      ${pos.includes("left") ? "border-r-0" : "border-l-0"}
+                      ${pos.includes("top") ? "border-b-0" : "border-t-0"}`}
+                  />
+                ))}
+
+                {/* estado */}
+                <div className="pointer-events-none absolute inset-0 flex items-end justify-center p-3">
+                  <div
+                    className={`px-3 py-2 rounded-lg text-white text-sm font-semibold ${badgeClasses} backdrop-blur shadow`}
+                  >
+                    {status.text}
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Controles bajo visor */}
+          {/* Controles (linterna + nota) */}
           {cameraActive && (
-            <div className="mt-1 flex items-center gap-3">
+            <div className="mt-4 flex items-center justify-center gap-3">
               {showTorch && (
                 <button
                   onClick={toggleTorch}
-                  className="px-3 py-2 rounded-lg bg-white hover:bg-emerald-50 text-sm font-medium border border-emerald-300 shadow-sm"
-                  title="Linterna (si el dispositivo lo soporta)"
+                  className="px-3 py-2 rounded-lg bg-white text-green-700 hover:bg-green-50 text-sm font-medium border border-green-200 shadow-sm"
                 >
                   {torchOn ? "Apagar linterna" : "Encender linterna"}
                 </button>
               )}
-              <span className="text-xs text-emerald-900/60">
+              <span className="text-xs text-white/80">
                 Conexión segura requerida (https) salvo en{" "}
                 <span className="font-mono">localhost</span>.
               </span>
@@ -315,8 +326,8 @@ export default function AlmacenScan({ onLogout }) {
 
           {/* Fallback sin cámara */}
           {cameraError && !cameraActive && (
-            <div className="w-full max-w-sm mx-auto bg-white/80 border border-emerald-200 rounded-xl p-4 backdrop-blur shadow">
-              <div className="text-sm font-medium mb-2 text-emerald-900">
+            <div className="w-full max-w-md mt-8 mx-auto bg-white/90 border border-white/30 rounded-xl p-4 backdrop-blur shadow">
+              <div className="text-sm font-medium mb-2 text-green-800">
                 Probar sin cámara
               </div>
               <div className="flex gap-2">
@@ -324,11 +335,11 @@ export default function AlmacenScan({ onLogout }) {
                   value={manualQR}
                   onChange={(e) => setManualQR(e.target.value)}
                   placeholder="Pega/teclea un código QR"
-                  className="flex-1 rounded-lg border border-emerald-200 focus:border-emerald-400 outline-none px-3 py-2 text-sm bg-white"
+                  className="flex-1 rounded-lg border border-green-200 focus:border-green-400 outline-none px-3 py-2 text-sm bg-white text-green-900"
                 />
                 <button
                   onClick={() => manualQR && handleCheck(manualQR)}
-                  className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium shadow-sm"
+                  className="px-3 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium shadow-sm"
                 >
                   Probar
                 </button>
@@ -339,27 +350,27 @@ export default function AlmacenScan({ onLogout }) {
                     initializedRef.current = false;
                     handleOpen();
                   }}
-                  className="px-3 py-2 rounded-lg border border-emerald-300 bg-white hover:bg-emerald-50 text-sm font-medium"
+                  className="px-3 py-2 rounded-lg border border-green-200 bg-white hover:bg-green-50 text-sm font-medium text-green-800"
                 >
                   Reintentar
                 </button>
                 <button
                   onClick={() => window.open("app-settings:", "_blank")}
-                  className="px-3 py-2 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-900 text-sm font-medium border border-emerald-200"
+                  className="px-3 py-2 rounded-lg bg-green-50 hover:bg-green-100 text-green-900 text-sm font-medium border border-green-200"
                 >
                   Ajustes de cámara
                 </button>
               </div>
             </div>
           )}
+
+          {/* Divider + foot */}
+          <div className="w-full mt-10 border-t border-white/25" />
+          <div className="pt-3 text-xs text-white/85 text-center">
+            Acteco • Escáner de palets · Feedback visual en tiempo real
+          </div>
         </div>
       </main>
-
-      <footer className="w-full max-w-5xl mx-auto px-6 pb-8 text-xs text-emerald-900/60">
-        <div className="border-t border-emerald-200/60 pt-3">
-          Acteco • Escáner de palets · Feedback visual en tiempo real
-        </div>
-      </footer>
     </div>
   );
 }
