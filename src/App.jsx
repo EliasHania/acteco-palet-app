@@ -138,7 +138,7 @@ function App() {
 
   // Vista exclusiva para el rol "almacen": solo el escáner
   if (role === "almacen") {
-    return <AlmacenScan />;
+    return <AlmacenScan onLogout={handleLogout} />;
   }
 
   if (esAdmin) {
