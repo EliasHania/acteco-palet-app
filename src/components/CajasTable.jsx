@@ -56,7 +56,6 @@ const CajasTable = ({
       encargada.charAt(0).toUpperCase() + encargada.slice(1)
     } – ${fechaTexto}`;
 
-    // Detalle fila a fila con trabajadora
     const sheetData = [
       [titulo],
       [],
@@ -71,15 +70,8 @@ const CajasTable = ({
       ],
     ];
 
-    const resumenPorTipo = {
-      "46x28": 0,
-      "40x28": 0,
-      "46x11": 0,
-      "40x11": 0,
-      "38x11": 0,
-      "32x11": 0,
-      "26x11": 0,
-    };
+    // 👇 NO preinicializamos con ceros
+    const resumenPorTipo = {};
 
     let totalPerchas = 0;
     const ordenadas = [...cajas].sort(
@@ -106,22 +98,27 @@ const CajasTable = ({
         new Date(c.timestamp).toLocaleTimeString(),
       ]);
 
-      if (resumenPorTipo.hasOwnProperty(c.tipo)) {
-        resumenPorTipo[c.tipo] += c.cantidad || 0;
-      }
+      // 👇 acumula solo lo que realmente existe
+      resumenPorTipo[c.tipo] =
+        (resumenPorTipo[c.tipo] || 0) + (c.cantidad || 0);
       totalPerchas += total;
     });
 
     sheetData.push([], ["Resumen por tipo de caja (cantidades y perchas):"]);
-    Object.entries(resumenPorTipo).forEach(([tipo, cantidad]) => {
-      const perCaja = perchasPorCaja[tipo] || 0;
-      sheetData.push([
-        `Total cajas de ${tipo}:`,
-        cantidad,
-        `Total perchas de ${tipo}:`,
-        cantidad * perCaja,
-      ]);
-    });
+
+    // 👇 escribe únicamente tipos con cantidad > 0
+    Object.entries(resumenPorTipo)
+      .filter(([, cantidad]) => cantidad > 0)
+      .sort(([a], [b]) => a.localeCompare(b)) // opcional
+      .forEach(([tipo, cantidad]) => {
+        const perCaja = perchasPorCaja[tipo] || 0;
+        sheetData.push([
+          `Total cajas de ${tipo}:`,
+          cantidad,
+          `Total perchas de ${tipo}:`,
+          cantidad * perCaja,
+        ]);
+      });
 
     const totalCajas = cajas.reduce((acc, c) => acc + (c.cantidad || 0), 0);
     sheetData.push([], ["Total de cajas registradas:", totalCajas]);
@@ -138,8 +135,8 @@ const CajasTable = ({
       { wch: 16 },
       { wch: 12 },
     ];
-    XLSX.utils.book_append_sheet(workbook, ws, "Cajas");
 
+    XLSX.utils.book_append_sheet(workbook, ws, "Cajas");
     const fechaArchivo = fecha.toLocaleDateString().replace(/\//g, "-");
     XLSX.writeFile(workbook, `resumen-cajas-${encargada}-${fechaArchivo}.xlsx`);
   };
