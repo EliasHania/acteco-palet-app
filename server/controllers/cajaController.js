@@ -4,12 +4,17 @@ import { DateTime } from "luxon";
 // ✅ Crear nueva caja
 export const createCaja = async (req, res) => {
   try {
-    const { tipo, cantidad } = req.body;
-    const registradaPor = req.user.username.toLowerCase();
+    const { tipo, cantidad, trabajadora, registradaPor } = req.body; // 👈 leer del body
+    const userReg = (req.user?.username || registradaPor || "").toLowerCase();
 
-    const nuevaCaja = new Caja({ tipo, cantidad, registradaPor });
+    const nuevaCaja = new Caja({
+      tipo,
+      cantidad,
+      trabajadora: trabajadora || null, // 👈 guardar
+      registradaPor: userReg,
+    });
+
     await nuevaCaja.save();
-
     res.status(201).json(nuevaCaja);
   } catch (err) {
     console.error("❌ Error al guardar caja:", err);

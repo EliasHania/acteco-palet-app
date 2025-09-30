@@ -98,6 +98,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
               <li key={index} className="flex justify-between border-b pb-1">
                 <span>{caja.tipo}</span>
                 <span>{caja.cantidad} cajas</span>
+                <span>{caja.trabajadora || "—"}</span> {/* 👈 nueva columna */}
                 <span>{new Date(caja.timestamp).toLocaleTimeString()}</span>
               </li>
             ))
@@ -297,6 +298,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
         [],
         [
           "Turno",
+          "Trabajadora", // 👈 NUEVO
           "Tipo de caja",
           "Cantidad",
           "Perchas por caja",
@@ -308,16 +310,28 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
       const resumenTipos = {};
       let totalPerchas = 0;
 
-      cajasFiltradas.forEach((caja) => {
+      // (opcional) orden cronológico
+      const ordenadas = [...cajasFiltradas].sort(
+        (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+      );
+
+      ordenadas.forEach((caja) => {
         const tipo = caja.tipo;
         const cantidad = caja.cantidad;
         const perchasPorUnidad = perchasPorCaja[tipo] || 0;
         const totalTipo = cantidad * perchasPorUnidad;
         totalPerchas += totalTipo;
-        const turno = caja.registradaPor === "yoana" ? "Yoana" : "Lidia";
+
+        const turno =
+          (caja.registradaPor || "").toLowerCase() === "yoana"
+            ? "Yoana"
+            : (caja.registradaPor || "").toLowerCase() === "lidia"
+            ? "Lidia"
+            : caja.registradaPor || "—";
 
         sheetData.push([
           turno,
+          caja.trabajadora || "No asignada", // 👈 NUEVO
           tipo,
           cantidad,
           perchasPorUnidad,
@@ -343,24 +357,22 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
         ]);
       });
 
-      const totalCajas = cajasFiltradas.reduce(
-        (acc, caja) => acc + caja.cantidad,
-        0
-      );
+      const totalCajas = cajasFiltradas.reduce((acc, c) => acc + c.cantidad, 0);
       sheetData.push([], ["Total de cajas registradas:", totalCajas]);
       sheetData.push(["Total de perchas registradas:", totalPerchas]);
 
       const ws = XLSX.utils.aoa_to_sheet(sheetData);
-      ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
+      ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }];
       ws["!cols"] = [
-        { wch: 12 },
-        { wch: 14 },
-        { wch: 10 },
-        { wch: 16 },
-        { wch: 16 },
-        { wch: 12 },
+        { wch: 12 }, // Turno
+        { wch: 18 }, // Trabajadora
+        { wch: 12 }, // Tipo
+        { wch: 10 }, // Cantidad
+        { wch: 16 }, // Perchas/caja
+        { wch: 16 }, // Total perchas
+        { wch: 12 }, // Hora
       ];
-      XLSX.utils.book_append_sheet(workbook, ws, "Resumen de cajas");
+      XLSX.utils.book_append_sheet(workbook, ws, "Cajas (detalle)");
     };
 
     generarHojaPalets("Yoana", yoana);

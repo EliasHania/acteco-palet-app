@@ -5,6 +5,7 @@ import PaletTable from "./components/PaletTable";
 import TrabajadorasManager from "./components/TrabajadorasManager";
 import AdminDashboard from "./components/AdminDashboard";
 import CajasForm from "./components/CajasForm";
+import CajasTable from "./components/CajasTable"; // 👈 NUEVO
 import Navbar from "./components/Navbar";
 import { io } from "socket.io-client";
 import AlmacenScan from "./components/AlmacenScan";
@@ -26,6 +27,9 @@ function App() {
     new Date().toLocaleDateString("sv-SE")
   );
   const [vista, setVista] = useState("palets");
+
+  // 👇 NUEVO estado para cajas
+  const [cajas, setCajas] = useState([]);
 
   // Decodificador seguro para base64url del JWT
   const b64urlToJson = (b64url) => {
@@ -90,7 +94,41 @@ function App() {
     }
   };
 
-  // Solo escucha socket y refresca si NO es rol almacen
+  // 👇 NUEVO: refrescar cajas (mismo criterio de filtrado que palets)
+  const refrescarCajas = async (fecha = fechaSeleccionada) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/cajas/fecha?fecha=${fecha}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      if (!res.ok) throw new Error("No autorizado");
+
+      const data = await res.json();
+
+      const visibles = esAdmin
+        ? data
+        : data.filter((c) => {
+            const limpiado = (c.registradaPor || "")
+              .trim()
+              .toLowerCase()
+              .replace(/[^a-z]/gi, "");
+            const encargadaLimpia = encargada
+              .trim()
+              .toLowerCase()
+              .replace(/[^a-z]/gi, "");
+            return limpiado === encargadaLimpia;
+          });
+
+      setCajas(visibles);
+    } catch (error) {
+      console.error("Error cargando cajas:", error);
+    }
+  };
+
+  // Solo escucha socket y refresca si NO es rol almacen (palets)
   useEffect(() => {
     if (encargada && role !== "almacen") {
       const handleNuevoPalet = () => refrescarPalets(fechaSeleccionada);
@@ -99,6 +137,13 @@ function App() {
       return () => socket.off("nuevoPalet", handleNuevoPalet);
     }
   }, [encargada, fechaSeleccionada, role]);
+
+  // 👇 NUEVO: refrescar cajas cuando se entre en la vista "cajas" o cambie la fecha/encargada/esAdmin
+  useEffect(() => {
+    if (encargada && role !== "almacen" && vista === "cajas") {
+      refrescarCajas(fechaSeleccionada);
+    }
+  }, [encargada, fechaSeleccionada, role, esAdmin, vista]);
 
   // Al montar, intenta leer el rol actual del token
   useEffect(() => {
@@ -121,6 +166,8 @@ function App() {
     localStorage.setItem("role", r);
 
     refrescarPalets(fechaSeleccionada);
+    // También cargamos cajas por si el usuario va a esa vista
+    refrescarCajas(fechaSeleccionada);
   };
 
   const handleLogout = () => {
@@ -128,6 +175,7 @@ function App() {
     setEsAdmin(false);
     setRole("");
     setPalets([]);
+    setCajas([]); // 👈 limpiar cajas
     localStorage.removeItem("encargada");
     localStorage.removeItem("esAdmin");
     localStorage.removeItem("token");
@@ -159,7 +207,11 @@ function App() {
       <Navbar
         encargada={encargada}
         vista={vista}
-        setVista={setVista}
+        setVista={(v) => {
+          setVista(v);
+          // al cambiar a "cajas", refrescamos inmediatamente
+          if (v === "cajas") refrescarCajas(fechaSeleccionada);
+        }}
         onLogout={handleLogout}
       />
       <main className="max-w-4xl mx-auto space-y-6">
@@ -183,7 +235,15 @@ function App() {
         )}
 
         {vista === "cajas" && (
-          <CajasForm fechaSeleccionada={fechaSeleccionada} />
+          <>
+            <CajasForm encargada={encargada} refrescarCajas={refrescarCajas} />
+            <CajasTable
+              encargada={encargada}
+              cajas={cajas}
+              setCajas={setCajas}
+              refrescarCajas={refrescarCajas}
+            />
+          </>
         )}
 
         {vista === "trabajadoras" && <TrabajadorasManager />}
