@@ -10,6 +10,7 @@ import authRoutes from "./routes/auth.js";
 import trabajadoraRoutes from "./routes/trabajadoras.js";
 import cajaRoutes from "./routes/cajas.js";
 import scansRoutes from "./routes/scans.js";
+import almacenRoutes from "./routes/almacen.js"; // 👈 NUEVO
 
 dotenv.config();
 
@@ -23,20 +24,15 @@ const allowedOrigins = [
 ];
 
 const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-  },
+  cors: { origin: allowedOrigins },
 });
 
 // ✅ Middleware CORS para Express
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("CORS bloqueado para: " + origin));
-      }
+      if (!origin || allowedOrigins.includes(origin)) callback(null, true);
+      else callback(new Error("CORS bloqueado para: " + origin));
     },
     credentials: true,
   })
@@ -44,6 +40,7 @@ app.use(
 
 app.use(express.json());
 
+// Mongo
 mongoose
   .connect(process.env.MONGO_URL)
   .then(() => console.log("✅ Conectado a MongoDB Atlas"))
@@ -54,22 +51,19 @@ app.get("/", (req, res) => {
   res.status(200).send("Servidor Acteco operativo ✅");
 });
 
-app.use("/api/palets", paletRoutes);
-app.use("/api/auth", authRoutes);
-
 // Compartir socket con la app
 app.set("socketio", io);
 
-// Ruta trabajadoras
+// ====== RUTAS ======
+app.use("/api/auth", authRoutes);
+app.use("/api/palets", paletRoutes);
 app.use("/api/trabajadoras", trabajadoraRoutes);
+app.use("/api/cajas", cajaRoutes);
+app.use("/api", scansRoutes); // /api/scan
+app.use("/api/almacen", almacenRoutes); // 👈 NUEVA (movimientos)
 
-// 🔧 Puerto dinámico (Render usa uno aleatorio)
+// ====== LISTEN ======
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => {
   console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
 });
-
-app.use("/api/cajas", cajaRoutes);
-
-// ruta de escaneo
-app.use("/api", scansRoutes);
