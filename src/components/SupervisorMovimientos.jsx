@@ -46,7 +46,7 @@ export default function SupervisorMovimientos({ onLogout }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- Mapeo único para CSV/Excel (mismas columnas)
+  // ---- Mapeo único para Excel (mismas columnas que en la tabla)
   const toFlatRows = (items) => {
     return items.map((m) => {
       const detalleMixta = (m.items || [])
@@ -87,150 +87,37 @@ export default function SupervisorMovimientos({ onLogout }) {
     });
   };
 
-  const exportCSV = () => {
-    const rows = toFlatRows(lista);
-    if (!rows.length) return;
-
-    const header = Object.keys(rows[0]);
-    const csv = [
-      header.join(","),
-      ...rows.map((r) =>
-        header
-          .map((k) => {
-            const v = r[k] == null ? "" : String(r[k]).replaceAll('"', '""');
-            return `"${v}"`;
-          })
-          .join(",")
-      ),
-    ].join("\n");
-
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `historial_${from}_a_${to}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // ✅ Exportar a Excel (.xlsx) con 3 hojas: Historial, Resumen por día, Cargas por tipo
+  // ✅ Exportar Excel: 1 sola hoja según el filtro seleccionado
   const exportExcel = () => {
     if (!lista.length) return;
 
-    const wb = XLSX.utils.book_new();
+    const sheetNameMap = {
+      todos: "Historial",
+      descarga: "Descargas",
+      carga: "Cargas",
+      "carga-mixta": "Cargas mixtas",
+    };
+    const sheetName = sheetNameMap[tipo] || "Historial";
 
-    // ---- Hoja 1: Historial
-    const histRows = toFlatRows(lista);
-    const wsHist = XLSX.utils.json_to_sheet(histRows);
-    // Anchuras de columnas según contenido
-    const headersHist = Object.keys(histRows[0] || {});
-    wsHist["!cols"] = headersHist.map((h) => {
+    const rows = toFlatRows(lista);
+    const ws = XLSX.utils.json_to_sheet(rows);
+
+    // Ajuste de anchuras de columnas
+    const headers = Object.keys(rows[0] || {});
+    ws["!cols"] = headers.map((h) => {
       const maxLen = Math.max(
         h.length,
-        ...histRows.map((r) => (r[h] ? String(r[h]).length : 0))
+        ...rows.map((r) => (r[h] ? String(r[h]).length : 0))
       );
       return { wch: Math.min(Math.max(maxLen + 2, 12), 50) };
     });
-    XLSX.utils.book_append_sheet(wb, wsHist, "Historial");
 
-    // ---- Hoja 2: Resumen por día
-    const resumenPorDia = {};
-    for (const m of lista) {
-      if (!resumenPorDia[m.fecha]) {
-        resumenPorDia[m.fecha] = {
-          fecha: m.fecha,
-          descPalets: 0,
-          descCajas: 0,
-          cargaSimplePalets: 0,
-          cargaMixtaPalets: 0,
-        };
-      }
-      const r = resumenPorDia[m.fecha];
-      if (m.tipo === "descarga") {
-        r.descPalets += m.palets || 0;
-        r.descCajas += m.numeroCajas || 0;
-      } else if (m.tipo === "carga") {
-        r.cargaSimplePalets += m.numeroPalets || 0;
-      } else if (m.tipo === "carga-mixta") {
-        const total = Number.isFinite(m.totalPalets)
-          ? m.totalPalets
-          : (m.items || []).reduce((a, it) => a + (it.numeroPalets || 0), 0);
-        r.cargaMixtaPalets += total;
-      }
-    }
-
-    const rowsDia = Object.values(resumenPorDia)
-      .sort((a, b) => (a.fecha < b.fecha ? -1 : 1))
-      .map((r) => ({
-        Fecha: r.fecha,
-        "Descargas — Palets": r.descPalets,
-        "Descargas — Cajas": r.descCajas,
-        "Cargas simple — Palets": r.cargaSimplePalets,
-        "Cargas mixtas — Palets": r.cargaMixtaPalets,
-        "Cargas TOTAL": r.cargaSimplePalets + r.cargaMixtaPalets,
-      }));
-
-    // Totales finales (fila extra)
-    if (rowsDia.length) {
-      const tot = rowsDia.reduce(
-        (acc, x) => {
-          acc.palDesc += x["Descargas — Palets"] || 0;
-          acc.cajDesc += x["Descargas — Cajas"] || 0;
-          acc.palCS += x["Cargas simple — Palets"] || 0;
-          acc.palCM += x["Cargas mixtas — Palets"] || 0;
-          return acc;
-        },
-        { palDesc: 0, cajDesc: 0, palCS: 0, palCM: 0 }
-      );
-      rowsDia.push({
-        Fecha: "TOTAL",
-        "Descargas — Palets": tot.palDesc,
-        "Descargas — Cajas": tot.cajDesc,
-        "Cargas simple — Palets": tot.palCS,
-        "Cargas mixtas — Palets": tot.palCM,
-        "Cargas TOTAL": tot.palCS + tot.palCM,
-      });
-    }
-
-    const wsDia = XLSX.utils.json_to_sheet(rowsDia);
-    wsDia["!cols"] = Object.keys(rowsDia[0] || {}).map(() => ({ wch: 20 }));
-    XLSX.utils.book_append_sheet(wb, wsDia, "Resumen por día");
-
-    // ---- Hoja 3: Cargas por tipo (simple + mixta)
-    const porTipo = {};
-    for (const m of lista) {
-      if (m.tipo === "carga") {
-        porTipo[m.tipoPalet] =
-          (porTipo[m.tipoPalet] || 0) + (m.numeroPalets || 0);
-      } else if (m.tipo === "carga-mixta") {
-        for (const it of m.items || []) {
-          porTipo[it.tipoPalet] =
-            (porTipo[it.tipoPalet] || 0) + (it.numeroPalets || 0);
-        }
-      }
-    }
-    const rowsTipo = Object.entries(porTipo)
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([tipoPalet, palets]) => ({
-        "Tipo de palet": tipoPalet,
-        "Palets cargados": palets,
-      }));
-    const totalPaletsCargados = rowsTipo.reduce(
-      (a, r) => a + (r["Palets cargados"] || 0),
-      0
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(
+      wb,
+      `historial_${sheetName.toLowerCase()}_${from}_a_${to}.xlsx`
     );
-    if (rowsTipo.length) {
-      rowsTipo.push({
-        "Tipo de palet": "TOTAL",
-        "Palets cargados": totalPaletsCargados,
-      });
-    }
-    const wsTipo = XLSX.utils.json_to_sheet(rowsTipo);
-    wsTipo["!cols"] = [{ wch: 16 }, { wch: 18 }];
-    XLSX.utils.book_append_sheet(wb, wsTipo, "Cargas por tipo");
-
-    // Guardar
-    XLSX.writeFile(wb, `historial_${from}_a_${to}.xlsx`);
   };
 
   const grouped = useMemo(() => {
@@ -314,17 +201,11 @@ export default function SupervisorMovimientos({ onLogout }) {
             >
               {loading ? "Buscando..." : "Buscar"}
             </button>
-            <button
-              onClick={exportCSV}
-              disabled={!lista.length}
-              className="px-4 py-2 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300 disabled:opacity-50"
-            >
-              Exportar CSV
-            </button>
+            {/* Solo Excel, en verde */}
             <button
               onClick={exportExcel}
               disabled={!lista.length}
-              className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
             >
               Exportar Excel
             </button>
