@@ -5,10 +5,11 @@ import PaletTable from "./components/PaletTable";
 import TrabajadorasManager from "./components/TrabajadorasManager";
 import AdminDashboard from "./components/AdminDashboard";
 import CajasForm from "./components/CajasForm";
-import CajasTable from "./components/CajasTable"; // 👈 NUEVO
+import CajasTable from "./components/CajasTable";
 import Navbar from "./components/Navbar";
 import { io } from "socket.io-client";
 import AlmacenScan from "./components/AlmacenScan";
+import SupervisorMovimientos from "./components/SupervisorMovimientos"; // 👈 NUEVO
 
 const socket = io(import.meta.env.VITE_BACKEND_URL);
 
@@ -28,7 +29,7 @@ function App() {
   );
   const [vista, setVista] = useState("palets");
 
-  // 👇 NUEVO estado para cajas
+  // 👇 estado para cajas
   const [cajas, setCajas] = useState([]);
 
   // Decodificador seguro para base64url del JWT
@@ -53,8 +54,8 @@ function App() {
 
   const refrescarPalets = async (fecha = fechaSeleccionada) => {
     try {
-      // si es almacen, no tiene sentido refrescar listados
-      if (role === "almacen") return;
+      // si es almacen o manuel, no refrescamos listados aquí
+      if (role === "almacen" || role === "manuel") return;
 
       const token = localStorage.getItem("token");
       const res = await fetch(
@@ -94,7 +95,7 @@ function App() {
     }
   };
 
-  // 👇 NUEVO: refrescar cajas (mismo criterio de filtrado que palets)
+  // 👇 refrescar cajas (mismo criterio de filtrado que palets)
   const refrescarCajas = async (fecha = fechaSeleccionada) => {
     try {
       const token = localStorage.getItem("token");
@@ -128,9 +129,9 @@ function App() {
     }
   };
 
-  // Solo escucha socket y refresca si NO es rol almacen (palets)
+  // Solo escucha socket y refresca si NO es rol almacen ni manuel (palets)
   useEffect(() => {
-    if (encargada && role !== "almacen") {
+    if (encargada && role !== "almacen" && role !== "manuel") {
       const handleNuevoPalet = () => refrescarPalets(fechaSeleccionada);
       refrescarPalets(fechaSeleccionada);
       socket.on("nuevoPalet", handleNuevoPalet);
@@ -138,9 +139,14 @@ function App() {
     }
   }, [encargada, fechaSeleccionada, role]);
 
-  // 👇 NUEVO: refrescar cajas cuando se entre en la vista "cajas" o cambie la fecha/encargada/esAdmin
+  // 👇 refrescar cajas al entrar en "cajas"
   useEffect(() => {
-    if (encargada && role !== "almacen" && vista === "cajas") {
+    if (
+      encargada &&
+      role !== "almacen" &&
+      role !== "manuel" &&
+      vista === "cajas"
+    ) {
       refrescarCajas(fechaSeleccionada);
     }
   }, [encargada, fechaSeleccionada, role, esAdmin, vista]);
@@ -166,7 +172,6 @@ function App() {
     localStorage.setItem("role", r);
 
     refrescarPalets(fechaSeleccionada);
-    // También cargamos cajas por si el usuario va a esa vista
     refrescarCajas(fechaSeleccionada);
   };
 
@@ -175,7 +180,7 @@ function App() {
     setEsAdmin(false);
     setRole("");
     setPalets([]);
-    setCajas([]); // 👈 limpiar cajas
+    setCajas([]);
     localStorage.removeItem("encargada");
     localStorage.removeItem("esAdmin");
     localStorage.removeItem("token");
@@ -184,11 +189,17 @@ function App() {
 
   if (!encargada) return <Login onLogin={handleLogin} />;
 
-  // Vista exclusiva para el rol "almacen": solo el escáner
+  // Vista exclusiva para el rol "almacen"
   if (role === "almacen") {
     return <AlmacenScan onLogout={handleLogout} />;
   }
 
+  // Vista exclusiva para el rol "manuel" (Supervisor)
+  if (role === "manuel") {
+    return <SupervisorMovimientos onLogout={handleLogout} />;
+  }
+
+  // Admin
   if (esAdmin) {
     return (
       <AdminDashboard
@@ -202,6 +213,7 @@ function App() {
     );
   }
 
+  // Vista encargada (palets/cajas)
   return (
     <div className="min-h-screen bg-gray-100 text-gray-800 p-4">
       <Navbar
@@ -209,7 +221,6 @@ function App() {
         vista={vista}
         setVista={(v) => {
           setVista(v);
-          // al cambiar a "cajas", refrescamos inmediatamente
           if (v === "cajas") refrescarCajas(fechaSeleccionada);
         }}
         onLogout={handleLogout}
