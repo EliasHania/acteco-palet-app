@@ -455,7 +455,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
                 onChange={setPrecinto}
               />
               <TextField
-                label="Remolque (opcional)"
+                label="Remolque"
                 placeholder="5678-DEF"
                 value={remolqueDesc}
                 onChange={setRemolqueDesc}

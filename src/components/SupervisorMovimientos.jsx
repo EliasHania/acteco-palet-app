@@ -8,6 +8,77 @@ const fmtHM = (d) =>
     ? new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : "";
 
+/* ===================== Helpers de Excel ===================== */
+// Filas “limpias” por tipo:
+const buildRowsDescarga = (items) =>
+  items
+    .filter((m) => m.tipo === "descarga")
+    .map((m) => ({
+      Fecha: m.fecha,
+      Contenedor: m.numeroContenedor || "",
+      Precinto: m.numeroPrecinto || "",
+      Origen: m.origen || "",
+      "Palets (descarga)": m.palets ?? "",
+      "Cajas (descarga)": m.numeroCajas ?? "",
+      "Llegada/Registro": m.timestamp
+        ? fmtHM(m.timestamp)
+        : m.timestampLlegada
+        ? fmtHM(m.timestampLlegada)
+        : "",
+      Salida: m.timestampSalida ? fmtHM(m.timestampSalida) : "",
+      Remolque: m.remolque || "",
+      Responsables: m.personal || "",
+    }));
+
+const buildRowsCarga = (items) =>
+  items
+    .filter((m) => m.tipo === "carga")
+    .map((m) => ({
+      Fecha: m.fecha,
+      Empresa: m.empresaTransportista || "",
+      "Tipo palet": m.tipoPalet || "",
+      "Nº palets": m.numeroPalets ?? "",
+      Contenedor: m.numeroContenedor || "",
+      Precinto: m.numeroPrecinto || "",
+      Tractora: m.tractora || "",
+      Remolque: m.remolque || "",
+      Llegada: m.timestampLlegada ? fmtHM(m.timestampLlegada) : "",
+      Salida: m.timestampSalida ? fmtHM(m.timestampSalida) : "",
+      Responsables: m.personal || "",
+    }));
+
+const buildRowsMixta = (items) =>
+  items
+    .filter((m) => m.tipo === "carga-mixta")
+    .map((m) => ({
+      Fecha: m.fecha,
+      Empresa: m.empresaTransportista || "",
+      "Mixta (detalle)": (m.items || [])
+        .map((it) => `${it.tipoPalet}x${it.numeroPalets}`)
+        .join(" | "),
+      "Total palets": m.totalPalets ?? "",
+      Contenedor: m.numeroContenedor || "",
+      Precinto: m.numeroPrecinto || "",
+      Tractora: m.tractora || "",
+      Remolque: m.remolque || "",
+      Llegada: m.timestampLlegada ? fmtHM(m.timestampLlegada) : "",
+      Salida: m.timestampSalida ? fmtHM(m.timestampSalida) : "",
+      Responsables: m.personal || "",
+    }));
+
+// Autoajusta anchuras en base al contenido
+const autosizeSheet = (ws, rows) => {
+  const headers = Object.keys(rows[0] || {});
+  ws["!cols"] = headers.map((h) => {
+    const maxLen = Math.max(
+      h.length,
+      ...rows.map((r) => (r[h] ? String(r[h]).length : 0))
+    );
+    return { wch: Math.min(Math.max(maxLen + 2, 12), 50) };
+  });
+};
+/* =========================================================== */
+
 export default function SupervisorMovimientos({ onLogout }) {
   const [from, setFrom] = useState(hoy());
   const [to, setTo] = useState(hoy());
@@ -46,72 +117,70 @@ export default function SupervisorMovimientos({ onLogout }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- filas para Excel
-  const toFlatRows = (items) => {
-    return items.map((m) => {
-      const detalleMixta = (m.items || [])
-        .map((it) => `${it.tipoPalet}x${it.numeroPalets}`)
-        .join(" | ");
-      const tipoPalet = m.tipo === "carga" ? m.tipoPalet : "";
-      const nPal =
-        m.tipo === "carga"
-          ? m.numeroPalets ?? ""
-          : m.tipo === "carga-mixta"
-          ? m.totalPalets ?? ""
-          : m.palets ?? "";
-
-      return {
-        Fecha: m.fecha,
-        Tipo: m.tipo,
-        Empresa: m.empresaTransportista || "",
-        Contenedor: m.numeroContenedor || "",
-        Precinto: m.numeroPrecinto || "",
-        Tractora: m.tractora || "",
-        Remolque: m.remolque || "",
-        Origen: m.origen || "",
-        "Palets (descarga)": m.tipo === "descarga" ? m.palets ?? "" : "",
-        "Cajas (descarga)": m.tipo === "descarga" ? m.numeroCajas ?? "" : "",
-        "Tipo palet (carga)": tipoPalet,
-        "Nº palets": nPal,
-        "Mixta (detalle)": m.tipo === "carga-mixta" ? detalleMixta : "",
-        "Llegada/Registro": m.timestampLlegada
-          ? fmtHM(m.timestampLlegada)
-          : m.timestamp
-          ? fmtHM(m.timestamp)
-          : "",
-        Salida: m.timestampSalida ? fmtHM(m.timestampSalida) : "",
-        Responsables: m.personal || "",
-      };
-    });
-  };
-
+  // Exportación Excel SEGÚN tipo (o 3 pestañas si es “todos”)
   const exportExcel = () => {
     if (!lista.length) return;
-    const sheetNameMap = {
-      todos: "Historial",
-      descarga: "Descargas",
-      carga: "Cargas",
-      "carga-mixta": "Cargas mixtas",
-    };
-    const ws = XLSX.utils.json_to_sheet(toFlatRows(lista));
-    const headers = Object.keys(toFlatRows(lista)[0] || {});
-    ws["!cols"] = headers.map((h) => {
-      const maxLen = Math.max(
-        h.length,
-        ...lista.map((r) => (r[h] ? String(r[h]).length : 0))
-      );
-      return { wch: Math.min(Math.max(maxLen + 2, 12), 50) };
-    });
+
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, sheetNameMap[tipo] || "Historial");
-    XLSX.writeFile(
-      wb,
-      `historial_${(
-        sheetNameMap[tipo] || "historial"
-      ).toLowerCase()}_${from}_a_${to}.xlsx`
-    );
+
+    if (tipo === "descarga") {
+      const rows = buildRowsDescarga(lista);
+      if (!rows.length) return;
+      const ws = XLSX.utils.json_to_sheet(rows);
+      autosizeSheet(ws, rows);
+      XLSX.utils.book_append_sheet(wb, ws, "Descargas");
+      XLSX.writeFile(wb, `historial_descargas_${from}_a_${to}.xlsx`);
+      return;
+    }
+
+    if (tipo === "carga") {
+      const rows = buildRowsCarga(lista);
+      if (!rows.length) return;
+      const ws = XLSX.utils.json_to_sheet(rows);
+      autosizeSheet(ws, rows);
+      XLSX.utils.book_append_sheet(wb, ws, "Cargas");
+      XLSX.writeFile(wb, `historial_cargas_${from}_a_${to}.xlsx`);
+      return;
+    }
+
+    if (tipo === "carga-mixta") {
+      const rows = buildRowsMixta(lista);
+      if (!rows.length) return;
+      const ws = XLSX.utils.json_to_sheet(rows);
+      autosizeSheet(ws, rows);
+      XLSX.utils.book_append_sheet(wb, ws, "Cargas mixtas");
+      XLSX.writeFile(wb, `historial_cargas_mixtas_${from}_a_${to}.xlsx`);
+      return;
+    }
+
+    // tipo === "todos" -> 3 hojas
+    const rowsD = buildRowsDescarga(lista);
+    const rowsC = buildRowsCarga(lista);
+    const rowsM = buildRowsMixta(lista);
+
+    if (rowsD.length) {
+      const wsD = XLSX.utils.json_to_sheet(rowsD);
+      autosizeSheet(wsD, rowsD);
+      XLSX.utils.book_append_sheet(wb, wsD, "Descargas");
+    }
+    if (rowsC.length) {
+      const wsC = XLSX.utils.json_to_sheet(rowsC);
+      autosizeSheet(wsC, rowsC);
+      XLSX.utils.book_append_sheet(wb, wsC, "Cargas");
+    }
+    if (rowsM.length) {
+      const wsM = XLSX.utils.json_to_sheet(rowsM);
+      autosizeSheet(wsM, rowsM);
+      XLSX.utils.book_append_sheet(wb, wsM, "Cargas mixtas");
+    }
+
+    // Si por fechas/tipo no hay nada, no exportamos.
+    if (!rowsD.length && !rowsC.length && !rowsM.length) return;
+
+    XLSX.writeFile(wb, `historial_${from}_a_${to}.xlsx`);
   };
 
+  // Agrupar pantalla por fecha para la tabla
   const grouped = useMemo(() => {
     const g = {};
     for (const m of lista) {
@@ -190,6 +259,14 @@ export default function SupervisorMovimientos({ onLogout }) {
               className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
             >
               {loading ? "Buscando..." : "Buscar"}
+            </button>
+            <button
+              onClick={cargar}
+              disabled={loading}
+              className="px-3 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-60"
+              title="Volver a consultar"
+            >
+              🔄 Refrescar
             </button>
             <button
               onClick={exportExcel}
