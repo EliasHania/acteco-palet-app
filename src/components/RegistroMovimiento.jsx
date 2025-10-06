@@ -26,7 +26,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
   const [contenedor, setContenedor] = useState("");
   const [origen, setOrigen] = useState("");
   const [precinto, setPrecinto] = useState("");
-  const [remolqueDesc, setRemolqueDesc] = useState(""); // opcional
+  const [remolqueDesc, setRemolqueDesc] = useState(""); // ✅ OBLIGATORIO
   const [responsablesDesc, setResponsablesDesc] = useState("");
   // Paso 2 descarga
   const [paletsDentro, setPaletsDentro] = useState("");
@@ -36,7 +36,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
   // -------- Carga simple
   const [fechaCarga, setFechaCarga] = useState(hoyISO());
   const [empresa, setEmpresa] = useState("");
-  const [destinoCarga, setDestinoCarga] = useState(""); // NUEVO requerido
+  const [destinoCarga, setDestinoCarga] = useState(""); // requerido
   const [tipoPalet, setTipoPalet] = useState("");
   const [numPalets, setNumPalets] = useState("");
   const [horaLlegada, setHoraLlegada] = useState(ahoraHM());
@@ -44,7 +44,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
   const [responsablesCarga, setResponsablesCarga] = useState("");
   // Opcionales/obligatorios según reglas
   const [contenedorCarga, setContenedorCarga] = useState(""); // opcional
-  const [precintoCarga, setPrecintoCarga] = useState(""); // ⬅️ OPCIONAL ahora
+  const [precintoCarga, setPrecintoCarga] = useState(""); // opcional
   const [tractoraCarga, setTractoraCarga] = useState(""); // opcional
   const [remolqueCarga, setRemolqueCarga] = useState(""); // requerido
 
@@ -65,11 +65,11 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
   const removeLineaMixta = (i) =>
     setLineasMixtas((prev) => prev.filter((_, idx) => idx !== i));
 
-  // NUEVO: destino de la carga mixta (requerido)
+  // destino carga mixta (requerido)
   const [destinoMixta, setDestinoMixta] = useState("");
   // Opcionales/obligatorios mixta
   const [contenedorMixta, setContenedorMixta] = useState(""); // opcional
-  const [precintoMixta, setPrecintoMixta] = useState(""); // ⬅️ OPCIONAL ahora
+  const [precintoMixta, setPrecintoMixta] = useState(""); // opcional
   const [tractoraMixta, setTractoraMixta] = useState(""); // opcional
   const [remolqueMixta, setRemolqueMixta] = useState(""); // requerido
   const [horaSalidaMixta, setHoraSalidaMixta] = useState("");
@@ -79,13 +79,18 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
     if (modo === "descarga") {
       // ✅ TODOS obligatorios en paso 1 (descarga)
       if (!fechaDesc || !horaDesc) return false;
-      if (!contenedor.trim() || !origen.trim() || !precinto.trim())
+      if (
+        !contenedor.trim() ||
+        !origen.trim() ||
+        !precinto.trim() ||
+        !remolqueDesc.trim() || // 👈 remolque ahora es OBLIGATORIO
+        !responsablesDesc.trim()
+      )
         return false;
-      if (!responsablesDesc.trim()) return false;
       return true;
     }
     if (modo === "carga") {
-      // ✅ Opcionales: tractora y nº contenedor y nº precinto
+      // ✅ Opcionales: tractora, nº contenedor y nº precinto
       // Requeridos: empresa, destino, tipo palet, nº palets, hora llegada, remolque, responsables
       if (
         !fechaCarga ||
@@ -126,6 +131,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
     contenedor,
     origen,
     precinto,
+    remolqueDesc,
     responsablesDesc,
     // carga simple
     fechaCarga,
@@ -172,7 +178,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
     if (!validoPaso1) {
       const detalle =
         modo === "descarga"
-          ? "Faltan: fecha, hora llegada, nº contenedor, origen, nº precinto y/o responsables."
+          ? "Faltan: fecha, hora llegada, nº contenedor, origen, nº precinto, remolque y/o responsables."
           : modo === "carga"
           ? "Faltan: fecha, empresa, destino, tipo palet, nº palets, hora llegada, remolque y/o responsables."
           : "Faltan: fecha, empresa, destino, hora llegada, remolque, responsables y/o líneas válidas.";
@@ -194,7 +200,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
           numeroContenedor: contenedor.trim(),
           origen: origen.trim(),
           numeroPrecinto: precinto.trim(),
-          remolque: remolqueDesc.trim() || undefined, // opcional
+          remolque: remolqueDesc.trim(), // ✅ ahora requerido
           personal: responsablesDesc.trim(),
           timestamp: llegadaISO,
           registradaPor: "almacen",
@@ -217,10 +223,9 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
           numeroContenedor: contenedorCarga.trim() || undefined, // opcional
           tractora: tractoraCarga.trim() || undefined, // opcional
           remolque: remolqueCarga.trim(), // requerido
-          // numeroPrecinto es OPCIONAL: lo incluimos solo si hay valor
           ...(precintoCarga.trim()
             ? { numeroPrecinto: precintoCarga.trim() }
-            : {}),
+            : {}), // opcional
         };
       } else {
         // carga-mixta
@@ -245,7 +250,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
           remolque: remolqueMixta.trim(), // requerido
           ...(precintoMixta.trim()
             ? { numeroPrecinto: precintoMixta.trim() }
-            : {}), // OPCIONAL
+            : {}), // opcional
         };
       }
 
@@ -266,7 +271,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
       });
       setPaso(2);
 
-      onSaved?.(); // por si hay panel de supervisor en vivo
+      onSaved?.();
     } catch (e) {
       setMsg({ tipo: "err", texto: e.message || "Error inesperado" });
     } finally {
@@ -459,7 +464,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
                 onChange={setPrecinto}
               />
               <TextField
-                label="Remolque (opcional)"
+                label="Remolque"
                 placeholder="5678-DEF"
                 value={remolqueDesc}
                 onChange={setRemolqueDesc}
