@@ -1,3 +1,4 @@
+// controllers/almacenController.js
 import Movimiento from "../models/Movimiento.js";
 
 const isYYYYMMDD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
@@ -17,14 +18,16 @@ export const crearMovimiento = async (req, res) => {
 
     // -------- Normalizaciones suaves --------
     const trim = (v) => (v == null ? v : String(v).trim());
-    b.numeroContenedor = trim(b.numeroContenedor);
+
+    b.numeroContenedor = trim(b.numeroContenedor); // opcional en carga/mixta
     b.numeroPrecinto = trim(b.numeroPrecinto);
     b.origen = trim(b.origen);
+    b.destino = trim(b.destino); // NUEVO (carga/mixta)
     b.empresaTransportista = trim(b.empresaTransportista);
     b.tipoPalet = trim(b.tipoPalet);
     b.personal = trim(b.personal);
     b.tractora = trim(b.tractora); // opcional en carga/mixta
-    b.remolque = trim(b.remolque); // requerido en carga/mixta según tu última instrucción
+    b.remolque = trim(b.remolque); // requerido en carga/mixta
 
     // -------- Fecha (YYYY-MM-DD) para indexar --------
     let fecha = b.fecha;
@@ -56,6 +59,7 @@ export const crearMovimiento = async (req, res) => {
       const t = new Date(b.timestamp);
       if (isNaN(t.getTime()))
         return res.status(400).json({ msg: "timestamp inválido" });
+      // remolque opcional; destino NO aplica en descarga
     } else if (b.tipo === "carga") {
       // Opcionales SOLO: tractora y numeroContenedor
       // Requeridos:
@@ -73,6 +77,7 @@ export const crearMovimiento = async (req, res) => {
       if (!b.numeroPrecinto)
         return res.status(400).json({ msg: "Falta número de precinto" });
       if (!b.remolque) return res.status(400).json({ msg: "Falta remolque" });
+      if (!b.destino) return res.status(400).json({ msg: "Falta destino" }); // NUEVO
       if (!b.personal)
         return res.status(400).json({ msg: "Faltan responsables" });
 
@@ -109,6 +114,7 @@ export const crearMovimiento = async (req, res) => {
       if (!b.numeroPrecinto)
         return res.status(400).json({ msg: "Falta número de precinto" });
       if (!b.remolque) return res.status(400).json({ msg: "Falta remolque" });
+      if (!b.destino) return res.status(400).json({ msg: "Falta destino" }); // NUEVO
       if (!b.personal)
         return res.status(400).json({ msg: "Faltan responsables" });
 

@@ -36,6 +36,7 @@ const buildRowsCarga = (items) =>
     .map((m) => ({
       Fecha: m.fecha,
       Empresa: m.empresaTransportista || "",
+      Destino: m.destino || "",
       "Tipo palet": m.tipoPalet || "",
       "Nº palets": m.numeroPalets ?? "",
       Contenedor: m.numeroContenedor || "",
@@ -53,6 +54,7 @@ const buildRowsMixta = (items) =>
     .map((m) => ({
       Fecha: m.fecha,
       Empresa: m.empresaTransportista || "",
+      Destino: m.destino || "",
       "Mixta (detalle)": (m.items || [])
         .map((it) => `${it.tipoPalet}x${it.numeroPalets}`)
         .join(" | "),
@@ -174,7 +176,6 @@ export default function SupervisorMovimientos({ onLogout }) {
       XLSX.utils.book_append_sheet(wb, wsM, "Cargas mixtas");
     }
 
-    // Si por fechas/tipo no hay nada, no exportamos.
     if (!rowsD.length && !rowsC.length && !rowsM.length) return;
 
     XLSX.writeFile(wb, `historial_${from}_a_${to}.xlsx`);
@@ -303,6 +304,7 @@ export default function SupervisorMovimientos({ onLogout }) {
                     <Th>Tipo</Th>
                     <Th>Empresa / Contenedor</Th>
                     <Th>Origen</Th>
+                    <Th>Destino</Th>
                     <Th>Detalle</Th>
                     <Th>Horas</Th>
                     <Th>Resp.</Th>
@@ -339,18 +341,26 @@ export default function SupervisorMovimientos({ onLogout }) {
 
                     const horas =
                       m.tipo === "descarga"
-                        ? fmtHM(m.timestamp)
+                        ? `${fmtHM(m.timestamp)}${
+                            m.timestampSalida
+                              ? " → " + fmtHM(m.timestampSalida)
+                              : ""
+                          }`
                         : `${fmtHM(m.timestampLlegada)}${
                             m.timestampSalida
                               ? " → " + fmtHM(m.timestampSalida)
                               : ""
                           }`;
 
+                    const destino =
+                      m.tipo === "descarga" ? "—" : m.destino || "—";
+
                     return (
                       <tr key={m._id} className="border-t last:border-b">
-                        <Td className="font-medium">{m.tipo}</Td>
+                        <Td className="font-medium capitalize">{m.tipo}</Td>
                         <Td>{empresaOCt}</Td>
                         <Td>{m.origen || "—"}</Td>
+                        <Td>{destino}</Td>
                         <Td>{detalle}</Td>
                         <Td>{horas}</Td>
                         <Td>{m.personal || "—"}</Td>

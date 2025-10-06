@@ -41,6 +41,8 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
   const [horaLlegada, setHoraLlegada] = useState(ahoraHM());
   const [horaSalida, setHoraSalida] = useState(""); // solo se completa en paso 2
   const [responsablesCarga, setResponsablesCarga] = useState("");
+  // NUEVO: destino de la carga (requerido)
+  const [destinoCarga, setDestinoCarga] = useState("");
   // Opcionales/obligatorios según reglas
   const [contenedorCarga, setContenedorCarga] = useState(""); // opcional
   const [precintoCarga, setPrecintoCarga] = useState(""); // ✅ REQUERIDO
@@ -64,6 +66,8 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
   const removeLineaMixta = (i) =>
     setLineasMixtas((prev) => prev.filter((_, idx) => idx !== i));
 
+  // NUEVO: destino de la carga mixta (requerido)
+  const [destinoMixta, setDestinoMixta] = useState("");
   // Opcionales/obligatorios mixta
   const [contenedorMixta, setContenedorMixta] = useState(""); // opcional
   const [precintoMixta, setPrecintoMixta] = useState(""); // ✅ REQUERIDO
@@ -82,7 +86,8 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
       return true;
     }
     if (modo === "carga") {
-      // ✅ Opcionales solo: tractora y nº contenedor. Resto obligatorios (incluye remolque y nº precinto)
+      // ✅ Opcionales solo: tractora y nº contenedor.
+      // Obligatorios: empresa, tipo palet, nº palets, hora llegada, nº precinto, remolque, responsables, **destino**
       if (
         !fechaCarga ||
         !empresa.trim() ||
@@ -90,7 +95,8 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
         !horaLlegada ||
         !precintoCarga.trim() ||
         !remolqueCarga.trim() ||
-        !responsablesCarga.trim()
+        !responsablesCarga.trim() ||
+        !destinoCarga.trim()
       )
         return false;
       const n = parseInt(numPalets, 10);
@@ -103,7 +109,8 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
       !horaLlegada ||
       !precintoMixta.trim() || // ✅ requerido
       !remolqueMixta.trim() || // ✅ requerido
-      !responsablesCarga.trim()
+      !responsablesCarga.trim() ||
+      !destinoMixta.trim() // ✅ requerido
     )
       return false;
     if (lineasMixtas.length === 0) return false;
@@ -132,10 +139,12 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
     precintoCarga,
     remolqueCarga,
     responsablesCarga,
+    destinoCarga,
     // mixta
     lineasMixtas,
     precintoMixta,
     remolqueMixta,
+    destinoMixta,
   ]);
 
   const validoPaso2 = useMemo(() => {
@@ -171,8 +180,8 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
         modo === "descarga"
           ? "Faltan: fecha, hora llegada, nº contenedor, origen, nº precinto y/o responsables."
           : modo === "carga"
-          ? "Faltan: fecha, empresa, tipo palet, nº palets, hora llegada, nº precinto, remolque y/o responsables."
-          : "Faltan: fecha, empresa, hora llegada, nº precinto, remolque, responsables y/o líneas válidas.";
+          ? "Faltan: fecha, empresa, destino, tipo palet, nº palets, hora llegada, nº precinto, remolque y/o responsables."
+          : "Faltan: fecha, empresa, destino, hora llegada, nº precinto, remolque, responsables y/o líneas válidas.";
       setMsg({ tipo: "err", texto: detalle });
       return;
     }
@@ -182,7 +191,6 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
       let payload;
 
       if (modo === "descarga") {
-        // ✅ el backend espera "timestamp" (no timestampLlegada) y puede recibir "remolque" opcional
         const llegadaISO = new Date(
           `${fechaDesc}T${horaDesc}:00`
         ).toISOString();
@@ -193,9 +201,9 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
           numeroPrecinto: precinto.trim(),
           remolque: remolqueDesc.trim() || undefined, // opcional
           personal: responsablesDesc.trim(),
-          timestamp: llegadaISO, // ✅ nombre correcto
+          timestamp: llegadaISO, // llegada descarga
           registradaPor: "almacen",
-          fecha: fechaDesc, // ✅ para índice por día
+          fecha: fechaDesc,
         };
       } else if (modo === "carga") {
         const llegadaISO = new Date(
@@ -204,6 +212,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
         payload = {
           tipo: "carga",
           empresaTransportista: empresa.trim(),
+          destino: destinoCarga.trim(), // NUEVO
           tipoPalet: tipoPalet.trim(),
           numeroPalets: parseInt(numPalets, 10),
           timestampLlegada: llegadaISO,
@@ -211,10 +220,9 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
           registradaPor: "almacen",
           fecha: fechaCarga,
           numeroContenedor: contenedorCarga.trim() || undefined, // opcional
-          numeroPrecinto: precintoCarga.trim(), // ✅ requerido
+          numeroPrecinto: precintoCarga.trim(), // requerido
           tractora: tractoraCarga.trim() || undefined, // opcional
-          remolque: remolqueCarga.trim(), // ✅ requerido
-          // horaSalida: se completa en paso 2
+          remolque: remolqueCarga.trim(), // requerido
         };
       } else {
         // carga-mixta
@@ -224,6 +232,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
         payload = {
           tipo: "carga-mixta",
           empresaTransportista: empresa.trim(),
+          destino: destinoMixta.trim(), // NUEVO
           items: lineasMixtas.map((l) => ({
             tipoPalet: l.tipo,
             numeroPalets: parseInt(l.cantidad, 10),
@@ -234,10 +243,9 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
           registradaPor: "almacen",
           fecha: fechaCarga,
           numeroContenedor: contenedorMixta.trim() || undefined, // opcional
-          numeroPrecinto: precintoMixta.trim(), // ✅ requerido
+          numeroPrecinto: precintoMixta.trim(), // requerido
           tractora: tractoraMixta.trim() || undefined, // opcional
-          remolque: remolqueMixta.trim(), // ✅ requerido
-          // horaSalida: se completa en paso 2
+          remolque: remolqueMixta.trim(), // requerido
         };
       }
 
@@ -248,7 +256,6 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.msg || "No se pudo guardar (paso 1)");
 
-      // Devuelve el objeto creado con _id
       const id = data?._id || data?.id;
       if (!id) throw new Error("El servidor no devolvió el ID del registro");
 
@@ -259,7 +266,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
       });
       setPaso(2);
 
-      onSaved?.(); // para que Manuel lo vea al instante
+      onSaved?.();
     } catch (e) {
       setMsg({ tipo: "err", texto: e.message || "Error inesperado" });
     } finally {
@@ -299,7 +306,6 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
             `${fechaDesc}T${horaSalidaDesc}:00`
           ).toISOString(),
         };
-        // ✅ endpoint específico de descarga
         url = `${
           import.meta.env.VITE_BACKEND_URL
         }/api/almacen/movimientos/${recordId}/descarga-final`;
@@ -309,7 +315,6 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
             `${fechaCarga}T${horaSalida}:00`
           ).toISOString(),
         };
-        // ✅ endpoint específico de cargas
         url = `${
           import.meta.env.VITE_BACKEND_URL
         }/api/almacen/movimientos/${recordId}/cerrar-carga`;
@@ -319,7 +324,6 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
             `${fechaCarga}T${horaSalidaMixta}:00`
           ).toISOString(),
         };
-        // ✅ endpoint específico de cargas
         url = `${
           import.meta.env.VITE_BACKEND_URL
         }/api/almacen/movimientos/${recordId}/cerrar-carga`;
@@ -334,8 +338,6 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
         throw new Error(data?.msg || "No se pudo completar (paso 2)");
 
       setMsg({ tipo: "ok", texto: "✔️ Movimiento completado." });
-
-      // Reset total para iniciar un nuevo registro
       resetTodo();
       onSaved?.();
     } catch (e) {
@@ -371,6 +373,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
     setHoraLlegada(ahoraHM());
     setHoraSalida("");
     setResponsablesCarga("");
+    setDestinoCarga("");
     setContenedorCarga("");
     setPrecintoCarga("");
     setTractoraCarga("");
@@ -378,6 +381,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
 
     // mixta
     setLineasMixtas([{ tipo: "", cantidad: "" }]);
+    setDestinoMixta("");
     setContenedorMixta("");
     setPrecintoMixta("");
     setTractoraMixta("");
@@ -528,6 +532,12 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
                 value={empresa}
                 onChange={setEmpresa}
               />
+              <TextField
+                label="Destino"
+                placeholder="Ciudad / Cliente / Centro"
+                value={destinoCarga}
+                onChange={setDestinoCarga}
+              />
               <SelectField
                 label="Tipo de palets"
                 value={tipoPalet}
@@ -623,6 +633,12 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
                 placeholder="Transportes ACME"
                 value={empresa}
                 onChange={setEmpresa}
+              />
+              <TextField
+                label="Destino"
+                placeholder="Ciudad / Cliente / Centro"
+                value={destinoMixta}
+                onChange={setDestinoMixta}
               />
               <TextField
                 label="Hora de llegada"
