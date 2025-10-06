@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { authFetch } from "../authFetch";
 import * as XLSX from "xlsx";
 
-const hoy = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD
+const hoy = () => new Date().toLocaleDateString("sv-SE");
 const fmtHM = (d) =>
   d
     ? new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
@@ -46,16 +46,12 @@ export default function SupervisorMovimientos({ onLogout }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- Mapeo único para Excel (mismas columnas que en la tabla)
+  // ---- filas para Excel
   const toFlatRows = (items) => {
     return items.map((m) => {
       const detalleMixta = (m.items || [])
         .map((it) => `${it.tipoPalet}x${it.numeroPalets}`)
         .join(" | ");
-      const empresaOCont =
-        m.tipo === "descarga"
-          ? m.numeroContenedor
-          : m.empresaTransportista || "";
       const tipoPalet = m.tipo === "carga" ? m.tipoPalet : "";
       const nPal =
         m.tipo === "carga"
@@ -67,12 +63,14 @@ export default function SupervisorMovimientos({ onLogout }) {
       return {
         Fecha: m.fecha,
         Tipo: m.tipo,
-        "Empresa/Contenedor": empresaOCont,
+        Empresa: m.empresaTransportista || "",
+        Contenedor: m.numeroContenedor || "",
+        Precinto: m.numeroPrecinto || "",
+        Tractora: m.tractora || "",
+        Remolque: m.remolque || "",
         Origen: m.origen || "",
         "Palets (descarga)": m.tipo === "descarga" ? m.palets ?? "" : "",
         "Cajas (descarga)": m.tipo === "descarga" ? m.numeroCajas ?? "" : "",
-        "Precinto (descarga)":
-          m.tipo === "descarga" ? m.numeroPrecinto || "" : "",
         "Tipo palet (carga)": tipoPalet,
         "Nº palets": nPal,
         "Mixta (detalle)": m.tipo === "carga-mixta" ? detalleMixta : "",
@@ -87,41 +85,34 @@ export default function SupervisorMovimientos({ onLogout }) {
     });
   };
 
-  // ✅ Exportar Excel: 1 sola hoja según el filtro seleccionado
   const exportExcel = () => {
     if (!lista.length) return;
-
     const sheetNameMap = {
       todos: "Historial",
       descarga: "Descargas",
       carga: "Cargas",
       "carga-mixta": "Cargas mixtas",
     };
-    const sheetName = sheetNameMap[tipo] || "Historial";
-
-    const rows = toFlatRows(lista);
-    const ws = XLSX.utils.json_to_sheet(rows);
-
-    // Ajuste de anchuras de columnas
-    const headers = Object.keys(rows[0] || {});
+    const ws = XLSX.utils.json_to_sheet(toFlatRows(lista));
+    const headers = Object.keys(toFlatRows(lista)[0] || {});
     ws["!cols"] = headers.map((h) => {
       const maxLen = Math.max(
         h.length,
-        ...rows.map((r) => (r[h] ? String(r[h]).length : 0))
+        ...lista.map((r) => (r[h] ? String(r[h]).length : 0))
       );
       return { wch: Math.min(Math.max(maxLen + 2, 12), 50) };
     });
-
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.utils.book_append_sheet(wb, ws, sheetNameMap[tipo] || "Historial");
     XLSX.writeFile(
       wb,
-      `historial_${sheetName.toLowerCase()}_${from}_a_${to}.xlsx`
+      `historial_${(
+        sheetNameMap[tipo] || "historial"
+      ).toLowerCase()}_${from}_a_${to}.xlsx`
     );
   };
 
   const grouped = useMemo(() => {
-    // agrupar por fecha para mostrarlo ordenado
     const g = {};
     for (const m of lista) {
       if (!g[m.fecha]) g[m.fecha] = [];
@@ -134,7 +125,6 @@ export default function SupervisorMovimientos({ onLogout }) {
 
   return (
     <div className="min-h-screen bg-gray-100 text-gray-800">
-      {/* Header */}
       <div className="bg-emerald-700 text-white">
         <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
           <h1 className="text-2xl font-semibold">
@@ -201,7 +191,6 @@ export default function SupervisorMovimientos({ onLogout }) {
             >
               {loading ? "Buscando..." : "Buscar"}
             </button>
-            {/* Solo Excel, en verde */}
             <button
               onClick={exportExcel}
               disabled={!lista.length}
@@ -244,16 +233,33 @@ export default function SupervisorMovimientos({ onLogout }) {
                 </thead>
                 <tbody>
                   {items.map((m) => {
-                    const detalle =
+                    const empresaOCt = m.numeroContenedor
+                      ? m.numeroContenedor
+                      : m.empresaTransportista || "—";
+
+                    const detalleBase =
                       m.tipo === "descarga"
                         ? `Palets: ${m.palets ?? 0} · Cajas: ${
                             m.numeroCajas ?? 0
-                          } · Precinto: ${m.numeroPrecinto || ""}`
+                          }`
                         : m.tipo === "carga"
                         ? `Tipo: ${m.tipoPalet} · Palets: ${m.numeroPalets}`
                         : `Mixta: ${(m.items || [])
                             .map((it) => `${it.tipoPalet}x${it.numeroPalets}`)
                             .join(" | ")} · Total: ${m.totalPalets}`;
+
+                    const extra = [
+                      m.numeroPrecinto ? `Precinto: ${m.numeroPrecinto}` : "",
+                      m.tractora ? `Tractora: ${m.tractora}` : "",
+                      m.remolque ? `Remolque: ${m.remolque}` : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ");
+
+                    const detalle = extra
+                      ? `${detalleBase} · ${extra}`
+                      : detalleBase;
+
                     const horas =
                       m.tipo === "descarga"
                         ? fmtHM(m.timestamp)
@@ -262,10 +268,7 @@ export default function SupervisorMovimientos({ onLogout }) {
                               ? " → " + fmtHM(m.timestampSalida)
                               : ""
                           }`;
-                    const empresaOCt =
-                      m.tipo === "descarga"
-                        ? m.numeroContenedor
-                        : m.empresaTransportista || "";
+
                     return (
                       <tr key={m._id} className="border-t last:border-b">
                         <Td className="font-medium">{m.tipo}</Td>
