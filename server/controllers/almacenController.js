@@ -7,7 +7,7 @@ const isYYYYMMDD = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
  * POST /api/almacen/movimientos
  * PASO 1:
  * - Descarga: todos obligatorios (sin palets/numeroCajas/salida)
- * - Carga/Carga-mixta: todos obligatorios excepto tractora y numeroContenedor
+ * - Carga/Carga-mixta: todos obligatorios excepto tractora, numeroContenedor y (desde ahora) numeroPrecinto
  */
 export const crearMovimiento = async (req, res) => {
   try {
@@ -20,14 +20,21 @@ export const crearMovimiento = async (req, res) => {
     const trim = (v) => (v == null ? v : String(v).trim());
 
     b.numeroContenedor = trim(b.numeroContenedor); // opcional en carga/mixta
-    b.numeroPrecinto = trim(b.numeroPrecinto);
+    b.numeroPrecinto = trim(b.numeroPrecinto); // opcional en carga/mixta
     b.origen = trim(b.origen);
-    b.destino = trim(b.destino); // NUEVO (carga/mixta)
+    b.destino = trim(b.destino); // requerido en carga/mixta
     b.empresaTransportista = trim(b.empresaTransportista);
     b.tipoPalet = trim(b.tipoPalet);
     b.personal = trim(b.personal);
     b.tractora = trim(b.tractora); // opcional en carga/mixta
     b.remolque = trim(b.remolque); // requerido en carga/mixta
+    b.fecha = trim(b.fecha);
+
+    // Elimina strings vacíos para no guardar campos vacíos
+    if (!b.numeroContenedor) delete b.numeroContenedor;
+    if (!b.numeroPrecinto) delete b.numeroPrecinto;
+    if (!b.tractora) delete b.tractora;
+    if (!b.remolque && b.tipo !== "descarga") delete b.remolque; // remolque no aplica en descarga
 
     // -------- Fecha (YYYY-MM-DD) para indexar --------
     let fecha = b.fecha;
@@ -35,9 +42,8 @@ export const crearMovimiento = async (req, res) => {
       const base =
         b.tipo === "descarga"
           ? b.timestamp ?? Date.now() // llegada descarga
-          : b.timestampLlegada ?? b.timestampSalida ?? Date.now();
-      const d = new Date(base);
-      fecha = d.toISOString().slice(0, 10);
+          : b.timestampLlegada ?? Date.now(); // llegada carga/mixta
+      fecha = new Date(base).toISOString().slice(0, 10);
     }
     if (!isYYYYMMDD(fecha)) {
       return res.status(400).json({ msg: "Fecha inválida" });
@@ -50,7 +56,7 @@ export const crearMovimiento = async (req, res) => {
         return res.status(400).json({ msg: "Falta número de contenedor" });
       if (!b.origen) return res.status(400).json({ msg: "Falta origen" });
       if (!b.numeroPrecinto)
-        return res.status(400).json({ msg: "Falta número de precinto" });
+        return res.status(400).json({ msg: "Falta número de precinto" }); // obligatorio en descarga
       if (!b.timestamp)
         return res.status(400).json({ msg: "Falta hora de llegada" });
       if (!b.personal)
@@ -61,10 +67,11 @@ export const crearMovimiento = async (req, res) => {
         return res.status(400).json({ msg: "timestamp inválido" });
       // remolque opcional; destino NO aplica en descarga
     } else if (b.tipo === "carga") {
-      // Opcionales SOLO: tractora y numeroContenedor
+      // Opcionales: tractora, numeroContenedor y (ahora) numeroPrecinto
       // Requeridos:
       if (!b.empresaTransportista)
         return res.status(400).json({ msg: "Falta empresa transportista" });
+      if (!b.destino) return res.status(400).json({ msg: "Falta destino" });
       if (!b.tipoPalet)
         return res.status(400).json({ msg: "Falta tipo de palet" });
 
@@ -74,10 +81,8 @@ export const crearMovimiento = async (req, res) => {
 
       if (!b.timestampLlegada)
         return res.status(400).json({ msg: "Falta hora de llegada" });
-      if (!b.numeroPrecinto)
-        return res.status(400).json({ msg: "Falta número de precinto" });
+      // numeroPrecinto OPCIONAL en carga
       if (!b.remolque) return res.status(400).json({ msg: "Falta remolque" });
-      if (!b.destino) return res.status(400).json({ msg: "Falta destino" }); // NUEVO
       if (!b.personal)
         return res.status(400).json({ msg: "Faltan responsables" });
 
@@ -85,10 +90,11 @@ export const crearMovimiento = async (req, res) => {
       if (isNaN(t.getTime()))
         return res.status(400).json({ msg: "timestampLlegada inválido" });
     } else if (b.tipo === "carga-mixta") {
-      // Opcionales SOLO: tractora y numeroContenedor
+      // Opcionales: tractora, numeroContenedor y (ahora) numeroPrecinto
       // Requeridos:
       if (!b.empresaTransportista)
         return res.status(400).json({ msg: "Falta empresa transportista" });
+      if (!b.destino) return res.status(400).json({ msg: "Falta destino" });
       if (!Array.isArray(b.items) || b.items.length === 0)
         return res.status(400).json({ msg: "Faltan líneas de palets" });
 
@@ -97,7 +103,7 @@ export const crearMovimiento = async (req, res) => {
         const tipo = trim(it.tipoPalet);
         const n = Number(it.numeroPalets);
         if (!tipo || !Number.isFinite(n) || n <= 0)
-          return res.status(400).json({ msg: "Item de mixta inválido" });
+          return res.status(400).json({ msg: "Ítem de mixta inválido" });
         suma += n;
       }
 
@@ -106,15 +112,14 @@ export const crearMovimiento = async (req, res) => {
         !Number.isFinite(b.totalPalets) ||
         b.totalPalets <= 0 ||
         b.totalPalets !== suma
-      )
+      ) {
         return res.status(400).json({ msg: "Total de palets inválido" });
+      }
 
       if (!b.timestampLlegada)
         return res.status(400).json({ msg: "Falta hora de llegada" });
-      if (!b.numeroPrecinto)
-        return res.status(400).json({ msg: "Falta número de precinto" });
+      // numeroPrecinto OPCIONAL en carga-mixta
       if (!b.remolque) return res.status(400).json({ msg: "Falta remolque" });
-      if (!b.destino) return res.status(400).json({ msg: "Falta destino" }); // NUEVO
       if (!b.personal)
         return res.status(400).json({ msg: "Faltan responsables" });
 
