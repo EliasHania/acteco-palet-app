@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import * as XLSX from "xlsx";
-import AlmacenExportExcel from "./components/AlmacenExportExcel";
+import AlmacenExportExcel from "./AlmacenExportExcel.jsx";
 
 export default function EscanerTurnoAlmacen({ onLogout }) {
   const readerId = "almacen-qr-reader";
