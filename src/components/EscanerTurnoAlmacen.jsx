@@ -631,8 +631,11 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
                   value={manualCode}
                   onChange={(e) => setManualCode(e.target.value)}
                   placeholder="Pega o escribe el código/QR"
-                  className="flex-1 px-3 py-2 rounded-lg border border-emerald-300"
+                  autoComplete="off"
+                  className="flex-1 px-3 py-2 rounded-lg border bg-white text-emerald-900 placeholder-emerald-500 border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-500"
+                  style={{ WebkitTextFillColor: "#064e3b" }}
                 />
+
                 <button
                   onClick={handleManualSearch}
                   className="px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-sm font-medium"
