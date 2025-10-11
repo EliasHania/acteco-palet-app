@@ -29,24 +29,25 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
     type: "idle",
   });
 
-  // --- turno / responsable / escaneos sesión
+  // --- turno / responsable / escaneos sesión (vista)
   const [turno, setTurno] = useState(""); // "yoana" | "lidia"
   const [responsable, setResponsable] = useState(""); // nombre del encargado del escaneo en patio
-  const [scans, setScans] = useState([]); // {code, ok, ts, turno}
+  const [scans, setScans] = useState([]); // [{code, ok, ts, turno}]
 
   // --- palet pendiente (preview) y guardado
   const [pendingPalet, setPendingPalet] = useState(null); // objeto palet completo
   const [saving, setSaving] = useState(false);
 
-  // --- búsqueda manual (sin cámara)
+  // --- búsqueda manual / depuración
   const [manualCode, setManualCode] = useState("");
+  const [manualMatches, setManualMatches] = useState([]); // [{palet}]
   const [lastError, setLastError] = useState("");
   const [lastReqInfo, setLastReqInfo] = useState({ url: "", status: "" });
-  const [manualResults, setManualResults] = useState([]);
 
   // --- fondo radial (cosmético)
   const pageRef = useRef(null);
   const anchorRef = useRef(null);
+
   const lastCodeRef = useRef({ code: "", ts: 0 });
 
   const todayStr = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD
@@ -80,7 +81,6 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
       if (savedTurno) setTurno(savedTurno);
       if (savedResp) setResponsable(savedResp);
     } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -98,73 +98,59 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
     } catch {}
   }, [responsable]);
 
-  // --- API: obtener palet creado por encargada HOY por código (para escáner)
-  const fetchPaletByCode = async (codigo) => {
-    const res = await fetch(
-      `${
-        import.meta.env.VITE_BACKEND_URL
-      }/api/palets/by-code?code=${encodeURIComponent(
-        codigo
-      )}&date=${todayStr()}`,
-      { headers: { "Content-Type": "application/json", ...getAuthHeader() } }
-    );
-    if (!res.ok) throw new Error("No se pudo obtener el palet");
+  // === API HELPERS ===
+  // Palet (alta de encargadas) por código + fecha (turno opcional)
+  const fetchPaletByCode = async (codigo, turnoOpt) => {
+    const qs = new URLSearchParams({
+      code: codigo,
+      date: todayStr(),
+      ...(turnoOpt ? { turno: turnoOpt } : {}),
+    }).toString();
+    const url = `${import.meta.env.VITE_BACKEND_URL}/api/palets/by-code?${qs}`;
+    const res = await fetch(url, {
+      headers: { "Content-Type": "application/json", ...getAuthHeader() },
+    });
+    setLastReqInfo({ url, status: res.status });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json().catch(() => ({}));
     return data || null;
   };
 
-  // --- API: búsqueda manual (acepta turno)
-  const fetchPaletManual = async (codigo, turnoSel) => {
-    const params = new URLSearchParams({
-      code: codigo,
-      date: todayStr(),
-      ...(turnoSel ? { turno: turnoSel } : {}),
-    });
-    const url = `${
-      import.meta.env.VITE_BACKEND_URL
-    }/api/palets/by-code?${params}`;
-    setLastReqInfo({ url, status: "…" });
-    setLastError("");
-
+  // Cargar escaneos ya guardados hoy para mostrar en la lista de la derecha
+  const fetchTodayScans = async ({ turnoSel, respSel }) => {
     try {
+      if (!turnoSel) return;
+      const qs = new URLSearchParams({
+        fecha: todayStr(),
+        ...(turnoSel ? { turno: turnoSel } : {}),
+        // Si deseas filtrar por responsable exacto, descomenta la línea de abajo:
+        ...(respSel?.trim() ? { responsable: respSel.trim() } : {}),
+      }).toString();
+
+      const url = `${
+        import.meta.env.VITE_BACKEND_URL
+      }/api/almacen/escaneos/fecha?${qs}`;
       const res = await fetch(url, {
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
       });
-      setLastReqInfo({ url, status: res.status });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json().catch(() => null);
-      const arr = data ? [data] : [];
-      setManualResults(arr);
-      return arr;
-    } catch (e) {
-      setManualResults([]);
-      setLastError(e?.message || "Error consultando la BD");
-      return [];
+      const data = await res.json();
+
+      const rows = (data || []).map((d) => ({
+        code: d.codigo || d.qr || "",
+        ok: true,
+        ts: d.timestamp || d.createdAt || new Date().toISOString(),
+        turno: d.turno || turnoSel || "",
+      }));
+
+      rows.sort((a, b) => new Date(b.ts) - new Date(a.ts)); // nuevo -> antiguo
+      setScans(rows);
+    } catch (err) {
+      console.error("fetchTodayScans error:", err);
     }
   };
 
-  const handleManualSearch = async () => {
-    const code = manualCode.trim();
-    if (!code) {
-      setLastError("Introduce un código para buscar");
-      setManualResults([]);
-      return;
-    }
-    const arr = await fetchPaletManual(code, turno || undefined);
-    if (arr.length === 1) {
-      setPendingPalet(arr[0]);
-      setStatus({ text: "Palet encontrado. Revisa y añade.", type: "ok" });
-    } else if (arr.length === 0) {
-      setStatus({ text: "Sin coincidencias para hoy", type: "warn" });
-    } else {
-      setStatus({
-        text: `Encontradas ${arr.length} coincidencias`,
-        type: "ok",
-      });
-    }
-  };
-
-  // --- API: guardar copia íntegra del palet en colección de Almacén
+  // Guardar copia íntegra del palet en colección de Almacén
   const savePaletToAlmacen = async (paletObj) => {
     const now = new Date();
     const payload = {
@@ -176,6 +162,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
       timestamp: now.toISOString(),
       codigo: paletObj?.codigo || paletObj?.qr || "",
     };
+
     const res = await fetch(
       `${import.meta.env.VITE_BACKEND_URL}/api/almacen/escaneos`,
       {
@@ -184,14 +171,23 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
         body: JSON.stringify(payload),
       }
     );
+
+    let errBody = null;
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err?.msg || "No se pudo guardar el escaneo de almacén");
+      errBody = await res.json().catch(() => ({}));
+      const msg = String(errBody?.msg || "");
+      // Interpretar duplicado desde el backend (índice único)
+      if (res.status === 409 || /duplicate|duplicad/i.test(msg)) {
+        throw new Error("⚠️ Palet ya guardado hoy");
+      }
+      throw new Error(msg || "No se pudo guardar el escaneo de almacén");
     }
-    return await res.json().catch(() => ({}));
+
+    const out = await res.json().catch(() => ({}));
+    return out;
   };
 
-  // --- cuando llega un QR (escáner)
+  // === WORKFLOW DE ESCANEO ===
   const handleCheck = async (decodedText) => {
     const now = Date.now();
     if (
@@ -201,13 +197,22 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
       return;
     lastCodeRef.current = { code: decodedText, ts: now };
 
+    // Doble chequeo local: si ya está en la lista (cargada desde BD) => aviso y no abrimos modal
+    const already = scans.some(
+      (s) => String(s.code).toLowerCase() === String(decodedText).toLowerCase()
+    );
+    if (already) {
+      setStatus({ text: "⚠️ Palet ya guardado hoy", type: "warn" });
+      navigator.vibrate?.(150);
+      return;
+    }
+
     setStatus({ text: "Buscando palet del día…", type: "loading" });
 
     try {
-      const palet = await fetchPaletByCode(decodedText);
-
+      const palet = await fetchPaletByCode(decodedText, turno);
       if (palet) {
-        setPendingPalet(palet); // abre modal con toda la info
+        setPendingPalet(palet);
         setStatus({ text: "Palet encontrado. Revisa y añade.", type: "ok" });
         beep();
       } else {
@@ -215,6 +220,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
         navigator.vibrate?.(150);
       }
 
+      // Traza instantánea (no decisiva)
       setScans((prev) => [
         { code: decodedText, ok: !!palet, ts: new Date().toISOString(), turno },
         ...prev,
@@ -229,7 +235,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
     }
   };
 
-  // --- cámara
+  // === CÁMARA ===
   const startCamera = async () => {
     setCameraError(null);
     setStatus({ text: "Inicializando cámara…", type: "loading" });
@@ -333,7 +339,14 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
     } catch {}
   };
 
-  // --- Excel de la sesión local
+  // === CARGA AUTOMÁTICA DE ESCANEOS DEL DÍA ===
+  useEffect(() => {
+    if (!turno) return;
+    fetchTodayScans({ turnoSel: turno, respSel: responsable });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turno]); // si quieres, añade "responsable" para filtrar también por él
+
+  // === EXCEL (lista vista) ===
   const exportExcel = () => {
     if (!scans.length) return;
     const rows = scans
@@ -350,6 +363,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
         Turno: s.turno || "",
         Responsable: responsable || "",
       }));
+
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(rows);
     const headers = Object.keys(rows[0] || {});
@@ -398,6 +412,52 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
   const okCount = scans.filter((s) => s.ok).length;
   const badCount = total - okCount;
 
+  // === BÚSQUEDA MANUAL ===
+  const handleManualSearch = async () => {
+    setLastError("");
+    setManualMatches([]);
+    if (!manualCode.trim()) return;
+
+    // Pre-chequeo local de duplicado
+    const already = scans.some(
+      (s) => String(s.code).toLowerCase() === manualCode.trim().toLowerCase()
+    );
+    if (already) {
+      setStatus({ text: "⚠️ Palet ya guardado hoy", type: "warn" });
+      navigator.vibrate?.(120);
+      return;
+    }
+
+    try {
+      const palet = await fetchPaletByCode(manualCode.trim(), turno);
+      if (palet) {
+        setManualMatches([{ palet }]);
+        setStatus({ text: "Coincidencia encontrada", type: "ok" });
+      } else {
+        setStatus({ text: "Sin alta hoy con ese código", type: "warn" });
+      }
+    } catch (e) {
+      setLastError(String(e?.message || e));
+      setStatus({ text: "Error consultando la BD", type: "error" });
+    }
+  };
+
+  const handleSelectManual = (p) => {
+    setPendingPalet(p);
+  };
+
+  const addSavedScanToList = (paletObj) => {
+    const code = paletObj?.codigo || paletObj?.qr || "";
+    setScans((prev) => {
+      const exists = prev.some(
+        (x) => String(x.code).toLowerCase() === String(code).toLowerCase()
+      );
+      if (exists) return prev;
+      const row = { code, ok: true, ts: new Date().toISOString(), turno };
+      return [row, ...prev];
+    });
+  };
+
   return (
     <div
       ref={pageRef}
@@ -420,10 +480,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
           <div className="flex-1 flex flex-col sm:flex-row gap-2 sm:items-center sm:ml-auto">
             <select
               value={turno}
-              onChange={(e) => {
-                setTurno(e.target.value);
-                setScans([]); // limpia sesión al cambiar turno
-              }}
+              onChange={(e) => setTurno(e.target.value)} // ❗️ya no vaciamos la lista
               className="px-3 py-1.5 rounded-lg text-sm bg-white/90 text-emerald-900 border border-emerald-200"
             >
               <option value="">Selecciona turno…</option>
@@ -436,8 +493,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
               value={responsable}
               onChange={(e) => setResponsable(e.target.value)}
               placeholder="Responsable del escaneo (nombre)"
-              className="flex-1 px-3 py-1.5 rounded-lg text-sm bg-white text-emerald-900 border border-emerald-200 placeholder-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-              autoCapitalize="words"
+              className="flex-1 px-3 py-1.5 rounded-lg text-sm bg-white/90 text-emerald-900 border border-emerald-200 placeholder-emerald-700/70"
             />
           </div>
 
@@ -610,24 +666,18 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
               )}
             </div>
 
-            {/* === BÚSQUEDA MANUAL === */}
+            {/* ==== BÚSQUEDA MANUAL ==== */}
             <div className="mt-6 border-t border-emerald-200 pt-4">
               <div className="text-emerald-900 font-semibold mb-2">
                 ⌨️ Búsqueda manual (sin cámara)
               </div>
-
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={manualCode}
                   onChange={(e) => setManualCode(e.target.value)}
                   placeholder="Pega o escribe el código/QR"
-                  className="flex-1 px-3 py-2 rounded-lg border border-emerald-300
-                             bg-white text-emerald-900 placeholder-emerald-500
-                             focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                  autoCapitalize="off"
-                  autoCorrect="off"
-                  spellCheck={false}
+                  className="flex-1 px-3 py-2 rounded-lg border border-emerald-300 text-emerald-900 placeholder-emerald-500"
                 />
                 <button
                   onClick={handleManualSearch}
@@ -636,13 +686,6 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
                   Buscar manual
                 </button>
               </div>
-
-              {!!lastError && (
-                <div className="mt-3 text-xs bg-rose-50 border border-rose-200 text-rose-800 rounded p-2">
-                  <div className="font-semibold">Último error</div>
-                  <div className="font-mono break-words">{lastError}</div>
-                </div>
-              )}
 
               {(lastReqInfo?.url || lastReqInfo?.status) && (
                 <div className="mt-3 text-[11px] bg-emerald-50 border border-emerald-200 text-emerald-800 rounded p-2">
@@ -660,83 +703,49 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
                 </div>
               )}
 
-              {/* Resultados/coinidencias */}
-              <div className="mt-3 border rounded bg-white">
-                <div className="px-3 py-2 bg-emerald-50 border-b text-emerald-800 text-sm font-semibold">
-                  Coincidencias encontradas: {manualResults.length}
-                  {turno ? ` · turno ${turno}` : ""}
+              {!!lastError && (
+                <div className="mt-3 text-xs bg-rose-50 border border-rose-200 text-rose-800 rounded p-2">
+                  <div className="font-semibold">Último error</div>
+                  <div className="font-mono break-words">{lastError}</div>
                 </div>
+              )}
 
-                {!manualResults.length ? (
-                  <div className="px-3 py-3 text-sm text-emerald-700/80">
-                    Sin coincidencias aún.
+              {/* Lista de coincidencias */}
+              {!!manualMatches.length && (
+                <div className="mt-3 border rounded overflow-hidden">
+                  <div className="px-3 py-2 bg-emerald-50 border-b text-emerald-800 font-semibold">
+                    Coincidencias encontradas ({manualMatches.length})
                   </div>
-                ) : (
-                  <div className="max-h-[280px] overflow-auto">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-emerald-50">
-                        <tr>
-                          <th className="px-2 py-2 text-left border-b">
-                            Código
-                          </th>
-                          <th className="px-2 py-2 text-left border-b">
-                            Trabajadora
-                          </th>
-                          <th className="px-2 py-2 text-left border-b">Tipo</th>
-                          <th className="px-2 py-2 text-left border-b">
-                            Registrada por
-                          </th>
-                          <th className="px-2 py-2 text-left border-b">Hora</th>
-                          <th className="px-2 py-2 text-left border-b">
-                            Acción
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {manualResults.map((row) => (
-                          <tr
-                            key={row._id}
-                            className="odd:bg-white even:bg-emerald-50/40"
-                          >
-                            <td className="px-2 py-1 border-b">{row.codigo}</td>
-                            <td className="px-2 py-1 border-b">
-                              {row.trabajadora || ""}
-                            </td>
-                            <td className="px-2 py-1 border-b">
-                              {row.tipo || ""}
-                            </td>
-                            <td className="px-2 py-1 border-b">
-                              {row.registradaPor || ""}
-                            </td>
-                            <td className="px-2 py-1 border-b">
-                              {row.timestamp
-                                ? new Date(row.timestamp).toLocaleTimeString(
-                                    [],
-                                    {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    }
-                                  )
-                                : ""}
-                            </td>
-                            <td className="px-2 py-1 border-b">
-                              <button
-                                onClick={() => setPendingPalet(row)}
-                                className="px-2 py-1 rounded bg-emerald-600 text-white text-xs hover:bg-emerald-700"
-                              >
-                                Seleccionar
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+                  <ul className="divide-y">
+                    {manualMatches.map(({ palet }, idx) => (
+                      <li
+                        key={idx}
+                        className="px-3 py-2 flex items-center gap-3 text-sm"
+                      >
+                        <div className="flex-1">
+                          <div className="font-mono">
+                            {palet?.codigo || palet?.qr || "—"}
+                          </div>
+                          <div className="text-xs text-emerald-700/80">
+                            Trabajadora: <b>{palet?.trabajadora || "—"}</b> ·
+                            Tipo: <b>{palet?.tipo || "—"}</b> · Registrada por:{" "}
+                            <b>{palet?.registradaPor || "—"}</b>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleSelectManual(palet)}
+                          className="px-3 py-1.5 rounded bg-emerald-600 text-white text-xs hover:bg-emerald-700"
+                        >
+                          Seleccionar
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
 
-            {/* MODAL de confirmación */}
+            {/* MODAL de confirmación: mostrar toda la ficha y añadir a Almacén */}
             {pendingPalet && (
               <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
                 <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-emerald-200 overflow-hidden">
@@ -782,22 +791,49 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
                   <div className="px-5 py-4 border-t border-emerald-100 bg-emerald-50 flex gap-3">
                     <button
                       onClick={async () => {
+                        const code =
+                          pendingPalet?.codigo || pendingPalet?.qr || "";
+                        // Doble chequeo local por si ya cargó desde BD
+                        const already = scans.some(
+                          (s) =>
+                            String(s.code).toLowerCase() ===
+                            String(code).toLowerCase()
+                        );
+                        if (already) {
+                          setStatus({
+                            text: "⚠️ Palet ya guardado hoy",
+                            type: "warn",
+                          });
+                          setPendingPalet(null);
+                          navigator.vibrate?.(120);
+                          return;
+                        }
+
                         try {
                           setSaving(true);
                           await savePaletToAlmacen(pendingPalet);
-                          setPendingPalet(null);
                           setSaving(false);
+                          setPendingPalet(null);
                           setStatus({
                             text: "✅ Añadido a Almacén",
                             type: "ok",
                           });
                           beep();
+
+                          // Refrescar desde BD para mantener consistencia
+                          fetchTodayScans({
+                            turnoSel: turno,
+                            respSel: responsable,
+                          });
+                          // y reflejar inmediato en la lista local (evita parpadeos)
+                          addSavedScanToList(pendingPalet);
                         } catch (e) {
                           setSaving(false);
                           setStatus({
                             text: e?.message || "No se pudo añadir",
                             type: "error",
                           });
+                          navigator.vibrate?.(150);
                         } finally {
                           setTimeout(
                             () =>
@@ -828,7 +864,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
             )}
           </div>
 
-          {/* BOX 2: Lista de palets (traza de la sesión) */}
+          {/* BOX 2: Lista de palets (traza / BD del día) */}
           <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-white/30 shadow-xl p-6 flex flex-col">
             <div className="flex items-center gap-3 mb-4">
               <h3 className="text-lg font-semibold text-emerald-900">
@@ -858,7 +894,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
                   <ul className="divide-y divide-emerald-100">
                     {scans.map((s, i) => (
                       <li
-                        key={i}
+                        key={`${s.code}-${i}`}
                         className="px-4 py-3 flex items-center gap-3 text-sm hover:bg-emerald-50/50 transition"
                       >
                         <span
