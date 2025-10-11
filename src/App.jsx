@@ -8,8 +8,12 @@ import CajasForm from "./components/CajasForm";
 import CajasTable from "./components/CajasTable";
 import Navbar from "./components/Navbar";
 import { io } from "socket.io-client";
-import AlmacenScan from "./components/AlmacenScan";
-import SupervisorMovimientos from "./components/SupervisorMovimientos"; // 👈 NUEVO
+import SupervisorMovimientos from "./components/SupervisorMovimientos";
+
+// 👇 NUEVO: pestañas de almacén
+import AlmacenTabs from "./components/AlmacenTabs";
+// (Si quisieras usar el escáner directo en vez de pestañas)
+// import AlmacenScan from "./components/AlmacenScan";
 
 const socket = io(import.meta.env.VITE_BACKEND_URL);
 
@@ -28,11 +32,8 @@ function App() {
     new Date().toLocaleDateString("sv-SE")
   );
   const [vista, setVista] = useState("palets");
-
-  // 👇 estado para cajas
   const [cajas, setCajas] = useState([]);
 
-  // Decodificador seguro para base64url del JWT
   const b64urlToJson = (b64url) => {
     try {
       const b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
@@ -42,7 +43,6 @@ function App() {
       return {};
     }
   };
-
   const getRoleFromToken = () => {
     const t = localStorage.getItem("token");
     if (!t) return "";
@@ -54,21 +54,14 @@ function App() {
 
   const refrescarPalets = async (fecha = fechaSeleccionada) => {
     try {
-      // si es almacen o manuel, no refrescamos listados aquí
       if (role === "almacen" || role === "manuel") return;
-
       const token = localStorage.getItem("token");
       const res = await fetch(
         `${import.meta.env.VITE_BACKEND_URL}/api/palets/fecha?fecha=${fecha}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-
       if (!res.ok) throw new Error("No autorizado");
-
       const data = await res.json();
-
       const visibles = esAdmin
         ? data
         : data.filter((p) => {
@@ -82,33 +75,26 @@ function App() {
               .replace(/[^a-z]/gi, "");
             return limpiado === encargadaLimpia;
           });
-
       const nuevos = visibles.filter(
         (p) => !palets.some((x) => x._id === p._id)
       );
       setNuevosIds(nuevos.map((p) => p._id));
       setPalets(visibles);
-
       if (nuevos.length > 0) setTimeout(() => setNuevosIds([]), 5000);
-    } catch (error) {
-      console.error("Error cargando palets:", error);
+    } catch (e) {
+      console.error("Error cargando palets:", e);
     }
   };
 
-  // 👇 refrescar cajas (mismo criterio de filtrado que palets)
   const refrescarCajas = async (fecha = fechaSeleccionada) => {
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(
         `${import.meta.env.VITE_BACKEND_URL}/api/cajas/fecha?fecha=${fecha}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       if (!res.ok) throw new Error("No autorizado");
-
       const data = await res.json();
-
       const visibles = esAdmin
         ? data
         : data.filter((c) => {
@@ -122,14 +108,12 @@ function App() {
               .replace(/[^a-z]/gi, "");
             return limpiado === encargadaLimpia;
           });
-
       setCajas(visibles);
-    } catch (error) {
-      console.error("Error cargando cajas:", error);
+    } catch (e) {
+      console.error("Error cargando cajas:", e);
     }
   };
 
-  // Solo escucha socket y refresca si NO es rol almacen ni manuel (palets)
   useEffect(() => {
     if (encargada && role !== "almacen" && role !== "manuel") {
       const handleNuevoPalet = () => refrescarPalets(fechaSeleccionada);
@@ -139,7 +123,6 @@ function App() {
     }
   }, [encargada, fechaSeleccionada, role]);
 
-  // 👇 refrescar cajas al entrar en "cajas"
   useEffect(() => {
     if (
       encargada &&
@@ -151,7 +134,6 @@ function App() {
     }
   }, [encargada, fechaSeleccionada, role, esAdmin, vista]);
 
-  // Al montar, intenta leer el rol actual del token
   useEffect(() => {
     const r = getRoleFromToken();
     if (r) {
@@ -166,11 +148,9 @@ function App() {
     setEsAdmin(isAdmin);
     localStorage.setItem("encargada", nombreLimpio);
     localStorage.setItem("esAdmin", isAdmin);
-
     const r = getRoleFromToken();
     setRole(r);
     localStorage.setItem("role", r);
-
     refrescarPalets(fechaSeleccionada);
     refrescarCajas(fechaSeleccionada);
   };
@@ -189,12 +169,14 @@ function App() {
 
   if (!encargada) return <Login onLogin={handleLogin} />;
 
-  // Vista exclusiva para el rol "almacen"
+  // 👉 Rol ALMACÉN: usa las pestañas nuevas y pasa onLogout
   if (role === "almacen") {
-    return <AlmacenScan onLogout={handleLogout} />;
+    return <AlmacenTabs onLogout={handleLogout} />;
+    // Si prefieres renderizar el escáner directo:
+    // return <AlmacenScan onLogout={handleLogout} />;
   }
 
-  // Vista exclusiva para el rol "manuel" (Supervisor)
+  // Rol SUPERVISOR
   if (role === "manuel") {
     return <SupervisorMovimientos onLogout={handleLogout} />;
   }
@@ -213,7 +195,7 @@ function App() {
     );
   }
 
-  // Vista encargada (palets/cajas)
+  // Encargada (palets/cajas)
   return (
     <div className="min-h-screen bg-gray-100 text-gray-800 p-4">
       <Navbar
@@ -244,7 +226,6 @@ function App() {
             />
           </>
         )}
-
         {vista === "cajas" && (
           <>
             <CajasForm encargada={encargada} refrescarCajas={refrescarCajas} />
@@ -256,7 +237,6 @@ function App() {
             />
           </>
         )}
-
         {vista === "trabajadoras" && <TrabajadorasManager />}
       </main>
     </div>

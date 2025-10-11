@@ -476,6 +476,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
                 value={responsablesDesc}
                 onChange={setResponsablesDesc}
               />
+
               <div className="md:col-span-4">
                 <PrimaryButton onClick={guardarPaso1} disabled={guardando}>
                   {guardando ? "Guardando..." : "Guardar paso 1 y continuar"}
@@ -590,6 +591,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
                 value={responsablesCarga}
                 onChange={setResponsablesCarga}
               />
+
               <div className="md:col-span-4">
                 <PrimaryButton onClick={guardarPaso1} disabled={guardando}>
                   {guardando ? "Guardando..." : "Guardar paso 1 y continuar"}
@@ -738,6 +740,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
                 value={responsablesCarga}
                 onChange={setResponsablesCarga}
               />
+
               <div className="md:col-span-4">
                 <PrimaryButton onClick={guardarPaso1} disabled={guardando}>
                   {guardando ? "Guardando..." : "Guardar paso 1 y continuar"}

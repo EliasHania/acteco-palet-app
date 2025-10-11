@@ -1,389 +1,461 @@
+"use client";
+
 import { useEffect, useMemo, useState } from "react";
-import { authFetch } from "../authFetch";
 import * as XLSX from "xlsx";
 
-const hoy = () => new Date().toLocaleDateString("sv-SE");
-const fmtHM = (d) =>
-  d
-    ? new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : "";
+// Utilidad
+const fmtDate = (d = new Date()) => new Date(d).toLocaleDateString("sv-SE"); // YYYY-MM-DD
 
-/* ===================== Helpers de Excel ===================== */
-// Filas “limpias” por tipo:
-const buildRowsDescarga = (items) =>
-  items
-    .filter((m) => m.tipo === "descarga")
-    .map((m) => ({
-      Fecha: m.fecha,
-      Contenedor: m.numeroContenedor || "",
-      Precinto: m.numeroPrecinto || "",
-      Origen: m.origen || "",
-      "Palets (descarga)": m.palets ?? "",
-      "Cajas (descarga)": m.numeroCajas ?? "",
-      "Llegada/Registro": m.timestamp
-        ? fmtHM(m.timestamp)
-        : m.timestampLlegada
-        ? fmtHM(m.timestampLlegada)
-        : "",
-      Salida: m.timestampSalida ? fmtHM(m.timestampSalida) : "",
-      Remolque: m.remolque || "",
-      Responsables: m.personal || "",
-    }));
-
-const buildRowsCarga = (items) =>
-  items
-    .filter((m) => m.tipo === "carga")
-    .map((m) => ({
-      Fecha: m.fecha,
-      Empresa: m.empresaTransportista || "",
-      Destino: m.destino || "",
-      "Tipo palet": m.tipoPalet || "",
-      "Nº palets": m.numeroPalets ?? "",
-      Contenedor: m.numeroContenedor || "",
-      Precinto: m.numeroPrecinto || "",
-      Tractora: m.tractora || "",
-      Remolque: m.remolque || "",
-      Llegada: m.timestampLlegada ? fmtHM(m.timestampLlegada) : "",
-      Salida: m.timestampSalida ? fmtHM(m.timestampSalida) : "",
-      Responsables: m.personal || "",
-    }));
-
-const buildRowsMixta = (items) =>
-  items
-    .filter((m) => m.tipo === "carga-mixta")
-    .map((m) => ({
-      Fecha: m.fecha,
-      Empresa: m.empresaTransportista || "",
-      Destino: m.destino || "",
-      "Mixta (detalle)": (m.items || [])
-        .map((it) => `${it.tipoPalet}x${it.numeroPalets}`)
-        .join(" | "),
-      "Total palets": m.totalPalets ?? "",
-      Contenedor: m.numeroContenedor || "",
-      Precinto: m.numeroPrecinto || "",
-      Tractora: m.tractora || "",
-      Remolque: m.remolque || "",
-      Llegada: m.timestampLlegada ? fmtHM(m.timestampLlegada) : "",
-      Salida: m.timestampSalida ? fmtHM(m.timestampSalida) : "",
-      Responsables: m.personal || "",
-    }));
-
-// Autoajusta anchuras en base al contenido
-const autosizeSheet = (ws, rows) => {
-  const headers = Object.keys(rows[0] || {});
-  ws["!cols"] = headers.map((h) => {
-    const maxLen = Math.max(
-      h.length,
-      ...rows.map((r) => (r[h] ? String(r[h]).length : 0))
-    );
-    return { wch: Math.min(Math.max(maxLen + 2, 12), 50) };
+const api = (path, opts = {}) => {
+  const token =
+    localStorage.getItem("token") || sessionStorage.getItem("token");
+  return fetch(`${import.meta.env.VITE_BACKEND_URL}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    ...opts,
   });
 };
-/* =========================================================== */
 
 export default function SupervisorMovimientos({ onLogout }) {
-  const [from, setFrom] = useState(hoy());
-  const [to, setTo] = useState(hoy());
-  const [tipo, setTipo] = useState("todos");
-  const [loading, setLoading] = useState(false);
-  const [lista, setLista] = useState([]);
-  const [error, setError] = useState("");
+  const [tab, setTab] = useState("movimientos"); // "movimientos" | "escaneos"
 
-  const cargar = async () => {
-    setLoading(true);
-    setError("");
+  /* =========================
+   *       MOVIMIENTOS
+   * ========================= */
+  const [movFrom, setMovFrom] = useState(fmtDate());
+  const [movTo, setMovTo] = useState(fmtDate());
+  const [movimientos, setMovimientos] = useState([]);
+  const [loadingMov, setLoadingMov] = useState(false);
+  const [opBusyId, setOpBusyId] = useState(null); // deshabilitar acciones por fila
+
+  const cargarMovimientos = async () => {
+    setLoadingMov(true);
     try {
-      const url = new URL(
-        `${import.meta.env.VITE_BACKEND_URL}/api/almacen/movimientos/rango`
-      );
-      url.searchParams.set("from", from);
-      url.searchParams.set("to", to);
-      if (tipo) url.searchParams.set("tipo", tipo);
-
-      const res = await authFetch(url.toString());
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.msg || "No se pudo obtener el historial");
-      }
+      const qs = new URLSearchParams({ from: movFrom, to: movTo }).toString();
+      const res = await api(`/api/almacen/movimientos/rango?${qs}`);
+      if (!res.ok) throw new Error("No se pudieron cargar los movimientos");
       const data = await res.json();
-      setLista(data || []);
+      setMovimientos(Array.isArray(data) ? data : []);
     } catch (e) {
-      setError(e.message || "Error inesperado");
+      console.error(e);
+      setMovimientos([]);
     } finally {
-      setLoading(false);
+      setLoadingMov(false);
+    }
+  };
+
+  const columnasMov = useMemo(() => {
+    const keys = new Set();
+    (movimientos || []).forEach((r) =>
+      Object.keys(r || {}).forEach((k) => k !== "__v" && keys.add(k))
+    );
+    const prefer = [
+      "_id",
+      "fecha",
+      "createdAt",
+      "timestamp",
+      "codigo",
+      "turno",
+      "operacion",
+      "matricula",
+      "estado",
+      "descargaFinal",
+      "cerrada",
+    ];
+    const tail = [...keys].filter((k) => !prefer.includes(k));
+    return [...prefer.filter((k) => keys.has(k)), ...tail];
+  }, [movimientos]);
+
+  const exportMovimientosExcel = () => {
+    if (!movimientos.length) return;
+    const rows = movimientos.map((row) => {
+      const o = {};
+      columnasMov.forEach((k) => {
+        const v = row[k];
+        o[k] =
+          typeof v === "object" && v !== null
+            ? JSON.stringify(v)
+            : String(v ?? "");
+      });
+      if (row.timestamp) {
+        o["Fecha (humana)"] = new Date(row.timestamp).toLocaleDateString(
+          "sv-SE"
+        );
+        o["Hora (humana)"] = new Date(row.timestamp).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+      return o;
+    });
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const headers = Object.keys(rows[0] || {});
+    ws["!cols"] = headers.map((h) => {
+      const maxLen = Math.max(
+        h.length,
+        ...rows.map((r) => (r[h] ? String(r[h]).length : 0))
+      );
+      return { wch: Math.min(Math.max(maxLen + 2, 12), 60) };
+    });
+    XLSX.utils.book_append_sheet(wb, ws, "Movimientos");
+    XLSX.writeFile(wb, `movimientos_${movFrom}_a_${movTo}.xlsx`);
+  };
+
+  const patchFila = async (id, tipo) => {
+    try {
+      setOpBusyId(id);
+      const url =
+        tipo === "descarga"
+          ? `/api/almacen/movimientos/${id}/descarga-final`
+          : `/api/almacen/movimientos/${id}/cerrar-carga`;
+      const res = await api(url, { method: "PATCH", body: JSON.stringify({}) });
+      if (!res.ok) throw new Error("No se pudo actualizar el movimiento");
+      await cargarMovimientos();
+    } catch (e) {
+      console.error(e);
+      alert("No se pudo actualizar el movimiento.");
+    } finally {
+      setOpBusyId(null);
     }
   };
 
   useEffect(() => {
-    cargar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (tab === "movimientos") cargarMovimientos();
+  }, [tab]);
 
-  // Exportación Excel SEGÚN tipo (o 3 pestañas si es “todos”)
-  const exportExcel = () => {
-    if (!lista.length) return;
+  /* =========================
+   *        ESCANEOS
+   * ========================= */
+  const [from, setFrom] = useState(fmtDate());
+  const [to, setTo] = useState(fmtDate());
+  const [turno, setTurno] = useState("");
+  const [escaneos, setEscaneos] = useState([]);
+  const [loadingEscaneos, setLoadingEscaneos] = useState(false);
 
-    const wb = XLSX.utils.book_new();
-
-    if (tipo === "descarga") {
-      const rows = buildRowsDescarga(lista);
-      if (!rows.length) return;
-      const ws = XLSX.utils.json_to_sheet(rows);
-      autosizeSheet(ws, rows);
-      XLSX.utils.book_append_sheet(wb, ws, "Descargas");
-      XLSX.writeFile(wb, `historial_descargas_${from}_a_${to}.xlsx`);
-      return;
+  const cargarEscaneos = async () => {
+    setLoadingEscaneos(true);
+    try {
+      const qs = new URLSearchParams({
+        from,
+        to,
+        ...(turno ? { turno } : {}),
+      }).toString();
+      const res = await api(`/api/almacen/escaneos/rango?${qs}`);
+      if (!res.ok) throw new Error("No se pudieron cargar los escaneos");
+      const data = await res.json();
+      setEscaneos(data || []);
+    } catch (e) {
+      console.error(e);
+      setEscaneos([]);
+    } finally {
+      setLoadingEscaneos(false);
     }
-
-    if (tipo === "carga") {
-      const rows = buildRowsCarga(lista);
-      if (!rows.length) return;
-      const ws = XLSX.utils.json_to_sheet(rows);
-      autosizeSheet(ws, rows);
-      XLSX.utils.book_append_sheet(wb, ws, "Cargas");
-      XLSX.writeFile(wb, `historial_cargas_${from}_a_${to}.xlsx`);
-      return;
-    }
-
-    if (tipo === "carga-mixta") {
-      const rows = buildRowsMixta(lista);
-      if (!rows.length) return;
-      const ws = XLSX.utils.json_to_sheet(rows);
-      autosizeSheet(ws, rows);
-      XLSX.utils.book_append_sheet(wb, ws, "Cargas mixtas");
-      XLSX.writeFile(wb, `historial_cargas_mixtas_${from}_a_${to}.xlsx`);
-      return;
-    }
-
-    // tipo === "todos" -> 3 hojas
-    const rowsD = buildRowsDescarga(lista);
-    const rowsC = buildRowsCarga(lista);
-    const rowsM = buildRowsMixta(lista);
-
-    if (rowsD.length) {
-      const wsD = XLSX.utils.json_to_sheet(rowsD);
-      autosizeSheet(wsD, rowsD);
-      XLSX.utils.book_append_sheet(wb, wsD, "Descargas");
-    }
-    if (rowsC.length) {
-      const wsC = XLSX.utils.json_to_sheet(rowsC);
-      autosizeSheet(wsC, rowsC);
-      XLSX.utils.book_append_sheet(wb, wsC, "Cargas");
-    }
-    if (rowsM.length) {
-      const wsM = XLSX.utils.json_to_sheet(rowsM);
-      autosizeSheet(wsM, rowsM);
-      XLSX.utils.book_append_sheet(wb, wsM, "Cargas mixtas");
-    }
-
-    if (!rowsD.length && !rowsC.length && !rowsM.length) return;
-
-    XLSX.writeFile(wb, `historial_${from}_a_${to}.xlsx`);
   };
 
-  // Agrupar pantalla por fecha para la tabla
-  const grouped = useMemo(() => {
-    const g = {};
-    for (const m of lista) {
-      if (!g[m.fecha]) g[m.fecha] = [];
-      g[m.fecha].push(m);
-    }
-    for (const k of Object.keys(g))
-      g[k].sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
-    return g;
-  }, [lista]);
+  const columnasEscaneos = useMemo(() => {
+    const set = new Set();
+    escaneos.forEach((row) =>
+      Object.keys(row || {}).forEach((k) => k !== "__v" && set.add(k))
+    );
+    const prefer = [
+      "fecha",
+      "timestamp",
+      "codigo",
+      "turno",
+      "responsableEscaneo",
+      "origen",
+      "_id",
+      "createdAt",
+    ];
+    const tail = [...set].filter((k) => !prefer.includes(k));
+    return [...prefer.filter((k) => set.has(k)), ...tail];
+  }, [escaneos]);
+
+  const exportEscaneosExcel = () => {
+    if (!escaneos.length) return;
+    const rows = escaneos.map((row) => {
+      const o = {};
+      columnasEscaneos.forEach((k) => {
+        const v = row[k];
+        o[k] =
+          typeof v === "object" && v !== null
+            ? JSON.stringify(v)
+            : String(v ?? "");
+      });
+      if (row.timestamp) {
+        o["Fecha (humana)"] = new Date(row.timestamp).toLocaleDateString(
+          "sv-SE"
+        );
+        o["Hora (humana)"] = new Date(row.timestamp).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+      return o;
+    });
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const headers = Object.keys(rows[0] || {});
+    ws["!cols"] = headers.map((h) => {
+      const maxLen = Math.max(
+        h.length,
+        ...rows.map((r) => (r[h] ? String(r[h]).length : 0))
+      );
+      return { wch: Math.min(Math.max(maxLen + 2, 12), 60) };
+    });
+    XLSX.utils.book_append_sheet(wb, ws, "Escaneos");
+    XLSX.writeFile(wb, `escaneos_almacen_${from}_a_${to}.xlsx`);
+  };
+
+  useEffect(() => {
+    if (tab === "escaneos") cargarEscaneos();
+  }, [tab]);
 
   return (
-    <div className="min-h-screen bg-gray-100 text-gray-800">
-      <div className="bg-emerald-700 text-white">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-semibold">
-            📋 Supervisor — Historial de movimientos
-          </h1>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+      {/* Header con Cerrar sesión */}
+      <div className="mb-4 rounded-2xl border border-emerald-200 bg-white p-3 flex items-center gap-3">
+        <h2 className="text-emerald-900 font-semibold">Panel del Supervisor</h2>
+        <div className="ml-auto">
           <button
             onClick={onLogout}
-            className="px-3 py-1 rounded-full text-sm font-medium bg-rose-600 hover:bg-rose-700 border border-rose-300"
+            className="px-3 py-1 rounded-full text-sm font-medium bg-rose-600 text-white border border-rose-400/40 hover:bg-rose-700"
           >
-            Cerrar sesión
+            🔒 Cerrar sesión
           </button>
         </div>
       </div>
 
-      {/* Filtros */}
-      <div className="max-w-5xl mx-auto px-4 py-4">
-        <div className="rounded-xl bg-white border border-gray-200 p-4 flex flex-col md:flex-row gap-3 md:items-end">
-          <div className="flex-1">
-            <label className="block text-xs text-gray-600 mb-1">Desde</label>
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="w-full border rounded-lg p-2"
-            />
+      {/* Tabs */}
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => setTab("movimientos")}
+          className={`px-3 py-1.5 rounded-lg text-sm ${
+            tab === "movimientos"
+              ? "bg-emerald-600 text-white"
+              : "bg-white border border-emerald-200 text-emerald-800"
+          }`}
+        >
+          Movimientos
+        </button>
+        <button
+          onClick={() => setTab("escaneos")}
+          className={`px-3 py-1.5 rounded-lg text-sm ${
+            tab === "escaneos"
+              ? "bg-emerald-600 text-white"
+              : "bg-white border border-emerald-200 text-emerald-800"
+          }`}
+        >
+          Escaneos
+        </button>
+      </div>
+
+      {/* ====== Pestaña MOVIMIENTOS ====== */}
+      {tab === "movimientos" && (
+        <div className="bg-white rounded-2xl border border-emerald-200 p-4 shadow-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+            <div className="flex flex-col">
+              <label className="text-xs text-emerald-700/80 mb-1">Desde</label>
+              <input
+                type="date"
+                value={movFrom}
+                onChange={(e) => setMovFrom(e.target.value)}
+                className="px-2 py-1.5 border rounded"
+              />
+            </div>
+            <div className="flex flex-col">
+              <label className="text-xs text-emerald-700/80 mb-1">Hasta</label>
+              <input
+                type="date"
+                value={movTo}
+                onChange={(e) => setMovTo(e.target.value)}
+                className="px-2 py-1.5 border rounded"
+              />
+            </div>
+            <div className="flex items-end gap-2 sm:col-span-3">
+              <button
+                onClick={cargarMovimientos}
+                className="px-3 py-1.5 rounded bg-emerald-600 text-white text-sm"
+              >
+                {loadingMov ? "Cargando…" : "Cargar"}
+              </button>
+              <button
+                onClick={exportMovimientosExcel}
+                disabled={!movimientos.length}
+                className="px-3 py-1.5 rounded bg-emerald-700 text-white text-sm disabled:opacity-50"
+              >
+                Exportar Excel
+              </button>
+              <div className="ml-auto text-sm text-emerald-800">
+                Total: <b>{movimientos.length}</b>
+              </div>
+            </div>
           </div>
-          <div className="flex-1">
-            <label className="block text-xs text-gray-600 mb-1">Hasta</label>
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="w-full border rounded-lg p-2"
-            />
+
+          <div className="mt-3 border rounded overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-emerald-50">
+                <tr>
+                  {columnasMov.map((c) => (
+                    <th key={c} className="px-2 py-2 text-left border-b">
+                      {c}
+                    </th>
+                  ))}
+                  <th className="px-2 py-2 text-left border-b">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {movimientos.map((row) => (
+                  <tr
+                    key={row._id}
+                    className="odd:bg-white even:bg-emerald-50/40"
+                  >
+                    {columnasMov.map((c) => (
+                      <td key={c} className="px-2 py-1 border-b align-top">
+                        {typeof row[c] === "object" && row[c] !== null
+                          ? JSON.stringify(row[c])
+                          : String(row[c] ?? "")}
+                      </td>
+                    ))}
+                    <td className="px-2 py-1 border-b">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => patchFila(row._id, "descarga")}
+                          disabled={opBusyId === row._id}
+                          className="px-2 py-1 rounded bg-amber-600 text-white text-xs disabled:opacity-50"
+                          title="Marcar descarga final"
+                        >
+                          Descarga final
+                        </button>
+                        <button
+                          onClick={() => patchFila(row._id, "cerrar")}
+                          disabled={opBusyId === row._id}
+                          className="px-2 py-1 rounded bg-sky-700 text-white text-xs disabled:opacity-50"
+                          title="Cerrar carga"
+                        >
+                          Cerrar carga
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {!movimientos.length && (
+                  <tr>
+                    <td
+                      className="px-2 py-3 text-center text-emerald-700"
+                      colSpan={columnasMov.length + 1}
+                    >
+                      Sin resultados.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-          <div className="flex-1">
-            <label className="block text-xs text-gray-600 mb-1">Tipo</label>
-            <select
-              value={tipo}
-              onChange={(e) => setTipo(e.target.value)}
-              className="w-full border rounded-lg p-2"
-            >
-              <option value="todos">Todos</option>
-              <option value="descarga">Descarga</option>
-              <option value="carga">Carga</option>
-              <option value="carga-mixta">Carga mixta</option>
-            </select>
+        </div>
+      )}
+
+      {/* ====== Pestaña ESCANEOS ====== */}
+      {tab === "escaneos" && (
+        <div className="bg-white rounded-2xl border border-emerald-200 p-4 shadow-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+            <div className="flex flex-col">
+              <label className="text-xs text-emerald-700/80 mb-1">Desde</label>
+              <input
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                className="px-2 py-1.5 border rounded"
+              />
+            </div>
+            <div className="flex flex-col">
+              <label className="text-xs text-emerald-700/80 mb-1">Hasta</label>
+              <input
+                type="date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                className="px-2 py-1.5 border rounded"
+              />
+            </div>
+            <div className="flex flex-col">
+              <label className="text-xs text-emerald-700/80 mb-1">Turno</label>
+              <select
+                value={turno}
+                onChange={(e) => setTurno(e.target.value)}
+                className="px-2 py-1.5 border rounded"
+              >
+                <option value="">Todos</option>
+                <option value="yoana">Yoana</option>
+                <option value="lidia">Lidia</option>
+              </select>
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={cargarEscaneos}
+                className="px-3 py-1.5 rounded bg-emerald-600 text-white text-sm"
+              >
+                {loadingEscaneos ? "Cargando…" : "Cargar"}
+              </button>
+            </div>
           </div>
-          <div className="flex gap-2">
+
+          <div className="mt-3 flex gap-2">
             <button
-              onClick={() => {
-                setFrom(hoy());
-                setTo(hoy());
-                setTipo("todos");
-              }}
-              className="px-3 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50"
-            >
-              Hoy
-            </button>
-            <button
-              onClick={cargar}
-              disabled={loading}
-              className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-            >
-              {loading ? "Buscando..." : "Buscar"}
-            </button>
-            <button
-              onClick={cargar}
-              disabled={loading}
-              className="px-3 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-60"
-              title="Volver a consultar"
-            >
-              🔄 Refrescar
-            </button>
-            <button
-              onClick={exportExcel}
-              disabled={!lista.length}
-              className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+              onClick={exportEscaneosExcel}
+              disabled={!escaneos.length}
+              className="px-3 py-1.5 rounded bg-emerald-700 text-white text-sm disabled:opacity-50"
             >
               Exportar Excel
             </button>
+            <div className="ml-auto text-sm text-emerald-800">
+              Total: <b>{escaneos.length}</b>
+            </div>
+          </div>
+
+          <div className="mt-3 border rounded overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-emerald-50">
+                <tr>
+                  {columnasEscaneos.map((c) => (
+                    <th key={c} className="px-2 py-2 text-left border-b">
+                      {c}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {escaneos.map((row) => (
+                  <tr
+                    key={row._id}
+                    className="odd:bg-white even:bg-emerald-50/40"
+                  >
+                    {columnasEscaneos.map((c) => (
+                      <td key={c} className="px-2 py-1 border-b align-top">
+                        {typeof row[c] === "object" && row[c] !== null
+                          ? JSON.stringify(row[c])
+                          : String(row[c] ?? "")}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+                {!escaneos.length && (
+                  <tr>
+                    <td
+                      className="px-2 py-3 text-center text-emerald-700"
+                      colSpan={columnasEscaneos.length}
+                    >
+                      Sin resultados.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
-
-        {error && (
-          <div className="mt-3 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 p-3 text-sm">
-            {error}
-          </div>
-        )}
-      </div>
-
-      {/* Tabla */}
-      <div className="max-w-5xl mx-auto px-4 pb-10">
-        {Object.keys(grouped).length === 0 && !loading && (
-          <div className="text-sm text-gray-600">No hay resultados.</div>
-        )}
-
-        {Object.entries(grouped).map(([fecha, items]) => (
-          <div key={fecha} className="mb-6">
-            <div className="text-sm font-semibold text-gray-700 mb-2">
-              {fecha}
-            </div>
-            <div className="overflow-x-auto bg-white border border-gray-200 rounded-xl">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <Th>Tipo</Th>
-                    <Th>Empresa / Contenedor</Th>
-                    <Th>Origen</Th>
-                    <Th>Destino</Th>
-                    <Th>Detalle</Th>
-                    <Th>Horas</Th>
-                    <Th>Resp.</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((m) => {
-                    const empresaOCt = m.numeroContenedor
-                      ? m.numeroContenedor
-                      : m.empresaTransportista || "—";
-
-                    const detalleBase =
-                      m.tipo === "descarga"
-                        ? `Palets: ${m.palets ?? 0} · Cajas: ${
-                            m.numeroCajas ?? 0
-                          }`
-                        : m.tipo === "carga"
-                        ? `Tipo: ${m.tipoPalet} · Palets: ${m.numeroPalets}`
-                        : `Mixta: ${(m.items || [])
-                            .map((it) => `${it.tipoPalet}x${it.numeroPalets}`)
-                            .join(" | ")} · Total: ${m.totalPalets}`;
-
-                    const extra = [
-                      m.numeroPrecinto ? `Precinto: ${m.numeroPrecinto}` : "",
-                      m.tractora ? `Tractora: ${m.tractora}` : "",
-                      m.remolque ? `Remolque: ${m.remolque}` : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" · ");
-
-                    const detalle = extra
-                      ? `${detalleBase} · ${extra}`
-                      : detalleBase;
-
-                    const horas =
-                      m.tipo === "descarga"
-                        ? `${fmtHM(m.timestamp)}${
-                            m.timestampSalida
-                              ? " → " + fmtHM(m.timestampSalida)
-                              : ""
-                          }`
-                        : `${fmtHM(m.timestampLlegada)}${
-                            m.timestampSalida
-                              ? " → " + fmtHM(m.timestampSalida)
-                              : ""
-                          }`;
-
-                    const destino =
-                      m.tipo === "descarga" ? "—" : m.destino || "—";
-
-                    return (
-                      <tr key={m._id} className="border-t last:border-b">
-                        <Td className="font-medium capitalize">{m.tipo}</Td>
-                        <Td>{empresaOCt}</Td>
-                        <Td>{m.origen || "—"}</Td>
-                        <Td>{destino}</Td>
-                        <Td>{detalle}</Td>
-                        <Td>{horas}</Td>
-                        <Td>{m.personal || "—"}</Td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ))}
-      </div>
+      )}
     </div>
   );
-}
-
-function Th({ children }) {
-  return (
-    <th className="text-left px-3 py-2 font-semibold text-gray-700">
-      {children}
-    </th>
-  );
-}
-function Td({ children, className = "" }) {
-  return <td className={`px-3 py-2 align-top ${className}`}>{children}</td>;
 }
