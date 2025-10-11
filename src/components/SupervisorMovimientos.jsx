@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { DateTime } from "luxon";
+import AlmacenExportExcel from "./AlmacenExportExcel"; // ⬅️ reutilizamos el del patio
 
 // ===== Helpers con Luxon (zona Europe/Madrid)
 const ZONA = "Europe/Madrid";
@@ -176,37 +177,6 @@ export default function SupervisorMovimientos({ onLogout }) {
     const tail = [...set].filter((k) => !prefer.includes(k));
     return [...prefer.filter((k) => set.has(k)), ...tail];
   }, [escaneos]);
-
-  const exportEscaneosExcel = () => {
-    if (!escaneos.length) return;
-    const rows = escaneos.map((row) => {
-      const o = {};
-      columnasEscaneos.forEach((k) => {
-        const v = row[k];
-        o[k] =
-          typeof v === "object" && v !== null
-            ? JSON.stringify(v)
-            : String(v ?? "");
-      });
-      if (row.timestamp) {
-        o["Fecha (humana)"] = toHumanDate(row.timestamp);
-        o["Hora (humana)"] = toHumanTime(row.timestamp);
-      }
-      return o;
-    });
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const headers = Object.keys(rows[0] || {});
-    ws["!cols"] = headers.map((h) => {
-      const maxLen = Math.max(
-        h.length,
-        ...rows.map((r) => (r[h] ? String(r[h]).length : 0))
-      );
-      return { wch: Math.min(Math.max(maxLen + 2, 12), 60) };
-    });
-    XLSX.utils.book_append_sheet(wb, ws, "Escaneos");
-    XLSX.writeFile(wb, `escaneos_almacen_${from}_a_${to}.xlsx`);
-  };
 
   useEffect(() => {
     if (tab === "escaneos") cargarEscaneos();
@@ -401,13 +371,13 @@ export default function SupervisorMovimientos({ onLogout }) {
           </div>
 
           <div className="mt-3 flex gap-2">
-            <button
-              onClick={exportEscaneosExcel}
-              disabled={!escaneos.length}
-              className="px-3 py-1.5 rounded bg-emerald-700 text-white text-sm disabled:opacity-50"
-            >
-              Exportar Excel
-            </button>
+            {/* ⬇️ Mismo Excel que en el patio, reutilizado */}
+            <AlmacenExportExcel
+              turno={turno}
+              responsable={"Supervisor"}
+              registros={escaneos}
+              filePrefix="escaneos_supervisor"
+            />
             <div className="ml-auto text-sm text-emerald-800">
               Total: <b>{escaneos.length}</b>
             </div>
