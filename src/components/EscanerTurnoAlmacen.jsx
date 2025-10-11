@@ -38,10 +38,15 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
   const [pendingPalet, setPendingPalet] = useState(null); // objeto palet completo
   const [saving, setSaving] = useState(false);
 
+  // --- búsqueda manual (sin cámara)
+  const [manualCode, setManualCode] = useState("");
+  const [lastError, setLastError] = useState("");
+  const [lastReqInfo, setLastReqInfo] = useState({ url: "", status: "" });
+  const [manualResults, setManualResults] = useState([]);
+
   // --- fondo radial (cosmético)
   const pageRef = useRef(null);
   const anchorRef = useRef(null);
-
   const lastCodeRef = useRef({ code: "", ts: 0 });
 
   const todayStr = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD
@@ -68,7 +73,6 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
   };
 
   // === AUTOGUARDAR / AUTOCARGAR TURNO Y RESPONSABLE ===
-  // Cargar valores guardados al montar
   useEffect(() => {
     try {
       const savedTurno = localStorage.getItem(LS_KEYS.turno);
@@ -79,7 +83,6 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Guardar cuando cambien
   useEffect(() => {
     try {
       if (turno) localStorage.setItem(LS_KEYS.turno, turno);
@@ -95,31 +98,70 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
     } catch {}
   }, [responsable]);
 
-  // --- API: obtener palet creado por encargada HOY por código
+  // --- API: obtener palet creado por encargada HOY por código (para escáner)
   const fetchPaletByCode = async (codigo) => {
+    const res = await fetch(
+      `${
+        import.meta.env.VITE_BACKEND_URL
+      }/api/palets/by-code?code=${encodeURIComponent(
+        codigo
+      )}&date=${todayStr()}`,
+      { headers: { "Content-Type": "application/json", ...getAuthHeader() } }
+    );
+    if (!res.ok) throw new Error("No se pudo obtener el palet");
+    const data = await res.json().catch(() => ({}));
+    return data || null;
+  };
+
+  // --- API: búsqueda manual (acepta turno)
+  const fetchPaletManual = async (codigo, turnoSel) => {
     const params = new URLSearchParams({
       code: codigo,
       date: todayStr(),
-      ...(turno ? { turno } : {}), // ← opcional, pero útil
-    }).toString();
-
+      ...(turnoSel ? { turno: turnoSel } : {}),
+    });
     const url = `${
       import.meta.env.VITE_BACKEND_URL
     }/api/palets/by-code?${params}`;
-    const res = await fetch(url, {
-      headers: { "Content-Type": "application/json", ...getAuthHeader() },
-    });
+    setLastReqInfo({ url, status: "…" });
+    setLastError("");
 
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      console.error("❌ /by-code fallo:", res.status, txt);
-      throw new Error(
-        `(${res.status}) ${txt.slice(0, 200) || "Fallo en /by-code"}`
-      );
+    try {
+      const res = await fetch(url, {
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+      });
+      setLastReqInfo({ url, status: res.status });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json().catch(() => null);
+      const arr = data ? [data] : [];
+      setManualResults(arr);
+      return arr;
+    } catch (e) {
+      setManualResults([]);
+      setLastError(e?.message || "Error consultando la BD");
+      return [];
     }
+  };
 
-    const data = await res.json().catch(() => ({}));
-    return data || null;
+  const handleManualSearch = async () => {
+    const code = manualCode.trim();
+    if (!code) {
+      setLastError("Introduce un código para buscar");
+      setManualResults([]);
+      return;
+    }
+    const arr = await fetchPaletManual(code, turno || undefined);
+    if (arr.length === 1) {
+      setPendingPalet(arr[0]);
+      setStatus({ text: "Palet encontrado. Revisa y añade.", type: "ok" });
+    } else if (arr.length === 0) {
+      setStatus({ text: "Sin coincidencias para hoy", type: "warn" });
+    } else {
+      setStatus({
+        text: `Encontradas ${arr.length} coincidencias`,
+        type: "ok",
+      });
+    }
   };
 
   // --- API: guardar copia íntegra del palet en colección de Almacén
@@ -149,7 +191,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
     return await res.json().catch(() => ({}));
   };
 
-  // --- cuando llega un QR
+  // --- cuando llega un QR (escáner)
   const handleCheck = async (decodedText) => {
     const now = Date.now();
     if (
@@ -255,7 +297,6 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
   };
 
   const handleOpen = () => {
-    // obliga a elegir turno y responsable antes de abrir la cámara
     if (!turno || !responsable.trim()) {
       setStatus({ text: "Selecciona turno y responsable", type: "warn" });
       return;
@@ -292,7 +333,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
     } catch {}
   };
 
-  // --- Excel de la sesión local (para referencia rápida del operario)
+  // --- Excel de la sesión local
   const exportExcel = () => {
     if (!scans.length) return;
     const rows = scans
@@ -395,7 +436,8 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
               value={responsable}
               onChange={(e) => setResponsable(e.target.value)}
               placeholder="Responsable del escaneo (nombre)"
-              className="flex-1 px-3 py-1.5 rounded-lg text-sm bg-white/90 text-emerald-900 border border-emerald-200 placeholder-emerald-700/70"
+              className="flex-1 px-3 py-1.5 rounded-lg text-sm bg-white text-emerald-900 border border-emerald-200 placeholder-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              autoCapitalize="words"
             />
           </div>
 
@@ -411,7 +453,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
       {/* CONTENIDO: dos cards */}
       <main className="w-full max-w-6xl mx-auto px-4 sm:px-6 pb-8 mt-4">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* BOX 1: Cámara */}
+          {/* BOX 1: Cámara + búsqueda manual */}
           <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-white/30 shadow-xl p-6">
             <h3 className="text-lg font-semibold text-emerald-900 mb-4">
               📷 Escáner QR
@@ -568,7 +610,133 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
               )}
             </div>
 
-            {/* MODAL de confirmación: mostrar toda la ficha y añadir a Almacén */}
+            {/* === BÚSQUEDA MANUAL === */}
+            <div className="mt-6 border-t border-emerald-200 pt-4">
+              <div className="text-emerald-900 font-semibold mb-2">
+                ⌨️ Búsqueda manual (sin cámara)
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={manualCode}
+                  onChange={(e) => setManualCode(e.target.value)}
+                  placeholder="Pega o escribe el código/QR"
+                  className="flex-1 px-3 py-2 rounded-lg border border-emerald-300
+                             bg-white text-emerald-900 placeholder-emerald-500
+                             focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+                <button
+                  onClick={handleManualSearch}
+                  className="px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-sm font-medium"
+                >
+                  Buscar manual
+                </button>
+              </div>
+
+              {!!lastError && (
+                <div className="mt-3 text-xs bg-rose-50 border border-rose-200 text-rose-800 rounded p-2">
+                  <div className="font-semibold">Último error</div>
+                  <div className="font-mono break-words">{lastError}</div>
+                </div>
+              )}
+
+              {(lastReqInfo?.url || lastReqInfo?.status) && (
+                <div className="mt-3 text-[11px] bg-emerald-50 border border-emerald-200 text-emerald-800 rounded p-2">
+                  <div className="font-semibold">Depuración</div>
+                  <div className="break-words">
+                    <b>URL:</b> {lastReqInfo.url}
+                  </div>
+                  <div>
+                    <b>Status:</b> {String(lastReqInfo.status ?? "")}
+                  </div>
+                  <div>
+                    <b>BACKEND:</b>{" "}
+                    {String(import.meta.env.VITE_BACKEND_URL || "")}
+                  </div>
+                </div>
+              )}
+
+              {/* Resultados/coinidencias */}
+              <div className="mt-3 border rounded bg-white">
+                <div className="px-3 py-2 bg-emerald-50 border-b text-emerald-800 text-sm font-semibold">
+                  Coincidencias encontradas: {manualResults.length}
+                  {turno ? ` · turno ${turno}` : ""}
+                </div>
+
+                {!manualResults.length ? (
+                  <div className="px-3 py-3 text-sm text-emerald-700/80">
+                    Sin coincidencias aún.
+                  </div>
+                ) : (
+                  <div className="max-h-[280px] overflow-auto">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-emerald-50">
+                        <tr>
+                          <th className="px-2 py-2 text-left border-b">
+                            Código
+                          </th>
+                          <th className="px-2 py-2 text-left border-b">
+                            Trabajadora
+                          </th>
+                          <th className="px-2 py-2 text-left border-b">Tipo</th>
+                          <th className="px-2 py-2 text-left border-b">
+                            Registrada por
+                          </th>
+                          <th className="px-2 py-2 text-left border-b">Hora</th>
+                          <th className="px-2 py-2 text-left border-b">
+                            Acción
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {manualResults.map((row) => (
+                          <tr
+                            key={row._id}
+                            className="odd:bg-white even:bg-emerald-50/40"
+                          >
+                            <td className="px-2 py-1 border-b">{row.codigo}</td>
+                            <td className="px-2 py-1 border-b">
+                              {row.trabajadora || ""}
+                            </td>
+                            <td className="px-2 py-1 border-b">
+                              {row.tipo || ""}
+                            </td>
+                            <td className="px-2 py-1 border-b">
+                              {row.registradaPor || ""}
+                            </td>
+                            <td className="px-2 py-1 border-b">
+                              {row.timestamp
+                                ? new Date(row.timestamp).toLocaleTimeString(
+                                    [],
+                                    {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    }
+                                  )
+                                : ""}
+                            </td>
+                            <td className="px-2 py-1 border-b">
+                              <button
+                                onClick={() => setPendingPalet(row)}
+                                className="px-2 py-1 rounded bg-emerald-600 text-white text-xs hover:bg-emerald-700"
+                              >
+                                Seleccionar
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* MODAL de confirmación */}
             {pendingPalet && (
               <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
                 <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-emerald-200 overflow-hidden">
