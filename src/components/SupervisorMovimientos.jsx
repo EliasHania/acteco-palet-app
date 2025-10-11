@@ -300,35 +300,47 @@ export default function SupervisorMovimientos({ onLogout }) {
     }
   };
 
-  const columnasEscaneos = useMemo(() => {
-    const set = new Set();
-    escaneos.forEach((row) =>
-      Object.keys(row || {}).forEach((k) => k !== "__v" && set.add(k))
-    );
-    const prefer = [
-      "fecha",
-      "timestamp",
-      "codigo",
-      "turno",
-      "responsableEscaneo",
-      "origen",
-      "_id",
-      "createdAt",
-    ];
-    const tail = [...set].filter((k) => !prefer.includes(k));
-    return [...prefer.filter((k) => set.has(k)), ...tail];
-  }, [escaneos]);
+  // 🔎 Columnas SIMPLES para personas (sin _id ni campos técnicos)
+  const columnasEscaneos = [
+    {
+      key: "fecha",
+      label: "Fecha",
+      render: (row) => toHumanDate(row.timestamp || row.createdAt),
+    },
+    {
+      key: "hora",
+      label: "Hora",
+      render: (row) => toHumanTime(row.timestamp || row.createdAt),
+    },
+    { key: "codigo", label: "Código QR", render: (row) => row.codigo || "" },
+    { key: "turno", label: "Turno", render: (row) => cap(row.turno || "") },
+    {
+      key: "registradaPor",
+      label: "Registrado por",
+      render: (row) => row.registradaPor || "",
+    },
+    {
+      key: "responsableEscaneo",
+      label: "Responsable escaneo",
+      render: (row) => row.responsableEscaneo || "",
+    },
+    {
+      key: "trabajadora",
+      label: "Trabajadora",
+      render: (row) => row.trabajadora || "—",
+    },
+    { key: "tipo", label: "Tipo de palet", render: (row) => row.tipo || "—" },
+  ];
 
-  // === Exportador con el MISMO formato (Resumen + Detalle) que Almacén
+  // Excel con el mismo formato (Resumen + Detalle) que Almacén
   const exportEscaneosExcel = () => {
     if (!escaneos.length) return;
     const wb = buildWorkbookEscaneos({
       registros: escaneos,
-      turno, // filtro seleccionado (si quieres puedes dejar string vacío para "Todos")
+      turno,
       responsable: "Supervisor",
     });
-    const nombre = `escaneos_almacen_${from}_a_${to}.xlsx`;
-    XLSX.writeFile(wb, nombre);
+    XLSX.writeFile(wb, `escaneos_almacen_${from}_a_${to}.xlsx`);
   };
 
   useEffect(() => {
@@ -482,7 +494,7 @@ export default function SupervisorMovimientos({ onLogout }) {
         </div>
       )}
 
-      {/* ====== Escaneos ====== */}
+      {/* ====== Escaneos (tabla simplificada) ====== */}
       {tab === "escaneos" && (
         <div className="bg-white rounded-2xl border border-emerald-200 p-4 shadow-sm">
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
@@ -544,8 +556,8 @@ export default function SupervisorMovimientos({ onLogout }) {
               <thead className="bg-emerald-50">
                 <tr>
                   {columnasEscaneos.map((c) => (
-                    <th key={c} className="px-2 py-2 text-left border-b">
-                      {c}
+                    <th key={c.key} className="px-2 py-2 text-left border-b">
+                      {c.label}
                     </th>
                   ))}
                 </tr>
@@ -557,10 +569,8 @@ export default function SupervisorMovimientos({ onLogout }) {
                     className="odd:bg-white even:bg-emerald-50/40"
                   >
                     {columnasEscaneos.map((c) => (
-                      <td key={c} className="px-2 py-1 border-b align-top">
-                        {typeof row[c] === "object" && row[c] !== null
-                          ? JSON.stringify(row[c])
-                          : String(row[c] ?? "")}
+                      <td key={c.key} className="px-2 py-1 border-b align-top">
+                        {c.render(row)}
                       </td>
                     ))}
                   </tr>
