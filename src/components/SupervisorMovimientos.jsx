@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { DateTime } from "luxon";
-import AlmacenExportExcel from "./AlmacenExportExcel"; // ⬅️ reutilizamos el del patio
 
-// ===== Helpers con Luxon (zona Europe/Madrid)
+/* =========================
+ *  Luxon helpers (Madrid)
+ * ========================= */
 const ZONA = "Europe/Madrid";
 const hoyMadrid = () => DateTime.now().setZone(ZONA);
 const fmtDateISO = (dt = hoyMadrid()) => dt.toISODate(); // YYYY-MM-DD
@@ -14,7 +15,9 @@ const toHumanDate = (iso) =>
 const toHumanTime = (iso) =>
   iso ? DateTime.fromISO(iso).setZone(ZONA).toFormat("HH:mm") : "";
 
-// API helper
+/* =========================
+ *  API helper
+ * ========================= */
 const api = (path, opts = {}) => {
   const token =
     localStorage.getItem("token") || sessionStorage.getItem("token");
@@ -27,17 +30,157 @@ const api = (path, opts = {}) => {
   });
 };
 
+/* =========================
+ *  Excel builder (igual que Almacén)
+ * ========================= */
+const PERCHAS_POR_CAJA = {
+  "46x28": 45,
+  "40x28": 65,
+  "46x11": 125,
+  "40x11": 175,
+  "38x11": 175,
+  "32x11": 225,
+  "26x11": 325,
+};
+const cap = (s = "") => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
+
+function buildWorkbookEscaneos({
+  registros = [],
+  turno = "",
+  responsable = "",
+}) {
+  const wb = XLSX.utils.book_new();
+
+  // ---- Resúmenes
+  const resumenPorTrabajadora = {};
+  const resumenPorTipo = {
+    "46x28": 0,
+    "40x28": 0,
+    "46x11": 0,
+    "40x11": 0,
+    "38x11": 0,
+    "32x11": 0,
+    "26x11": 0,
+  };
+
+  registros.forEach((r) => {
+    const trabajadora = r.trabajadora || "—";
+    const tipo = r.tipo || "—";
+    if (!resumenPorTrabajadora[trabajadora])
+      resumenPorTrabajadora[trabajadora] = {};
+    resumenPorTrabajadora[trabajadora][tipo] =
+      (resumenPorTrabajadora[trabajadora][tipo] || 0) + 1;
+
+    if (resumenPorTipo.hasOwnProperty(tipo)) resumenPorTipo[tipo]++;
+  });
+
+  // ---- Hoja 1: Resumen
+  const hoyTexto = DateTime.now().setZone(ZONA).toLocaleString({
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+
+  const titulo = `Resumen del turno de ${cap(turno)} – ${hoyTexto}`;
+  const subtitulo = responsable
+    ? `Responsable del escaneo: ${responsable}`
+    : "";
+
+  const sheetResumen = [[titulo]];
+  if (subtitulo) sheetResumen.push([subtitulo]);
+  sheetResumen.push([]);
+  sheetResumen.push(["Resumen por trabajadora:"]);
+
+  Object.entries(resumenPorTrabajadora).forEach(([nombre, tipos]) => {
+    const detalles = Object.entries(tipos)
+      .map(
+        ([tipo, cantidad]) =>
+          `${cantidad} palet${cantidad > 1 ? "s" : ""} de ${tipo}`
+      )
+      .join(", ");
+    sheetResumen.push([`${nombre}:`, detalles]);
+  });
+
+  sheetResumen.push([]);
+  sheetResumen.push(["Resumen por tipo de palet (y perchas estimadas):"]);
+
+  let totalPerchas = 0;
+  Object.entries(resumenPorTipo).forEach(([tipo, cantidad]) => {
+    const perchas = cantidad * 20 * (PERCHAS_POR_CAJA[tipo] || 0);
+    totalPerchas += perchas;
+    sheetResumen.push([
+      `Total palets de ${tipo}:`,
+      cantidad,
+      `Total perchas de ${tipo}:`,
+      perchas,
+    ]);
+  });
+
+  sheetResumen.push([]);
+  sheetResumen.push(["Total palets registrados:", registros.length]);
+  sheetResumen.push(["Total perchas estimadas:", totalPerchas]);
+
+  const wsResumen = XLSX.utils.aoa_to_sheet(sheetResumen);
+  wsResumen["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }];
+  wsResumen["!cols"] = [{ wch: 36 }, { wch: 24 }, { wch: 36 }, { wch: 24 }];
+  XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
+
+  // ---- Hoja 2: Detalle
+  const headers = [
+    "Fecha",
+    "Hora",
+    "Código",
+    "Trabajadora",
+    "Tipo",
+    "Turno",
+    "Responsable",
+  ];
+
+  const rows = registros
+    .slice()
+    .sort(
+      (a, b) =>
+        new Date(a.timestamp || a.createdAt || 0) -
+        new Date(b.timestamp || b.createdAt || 0)
+    )
+    .map((r) => [
+      toHumanDate(r.timestamp || r.createdAt),
+      toHumanTime(r.timestamp || r.createdAt),
+      r.codigo || "",
+      r.trabajadora || "—",
+      r.tipo || "—",
+      r.turno || "",
+      r.responsableEscaneo || "",
+    ]);
+
+  const wsDetalle = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  wsDetalle["!cols"] = [
+    { wch: 12 },
+    { wch: 8 },
+    { wch: 14 },
+    { wch: 18 },
+    { wch: 10 },
+    { wch: 14 },
+    { wch: 18 },
+  ];
+  XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle");
+
+  return wb;
+}
+
+/* =========================
+ *  Componente
+ * ========================= */
 export default function SupervisorMovimientos({ onLogout }) {
   const [tab, setTab] = useState("movimientos"); // "movimientos" | "escaneos"
 
-  /* =========================
-   *       MOVIMIENTOS
-   * ========================= */
+  /* ========== MOVIMIENTOS ========== */
   const [movFrom, setMovFrom] = useState(fmtDateISO());
   const [movTo, setMovTo] = useState(fmtDateISO());
   const [movimientos, setMovimientos] = useState([]);
   const [loadingMov, setLoadingMov] = useState(false);
-  const [opBusyId, setOpBusyId] = useState(null); // deshabilitar acciones por fila
+  const [opBusyId, setOpBusyId] = useState(null);
 
   const cargarMovimientos = async () => {
     setLoadingMov(true);
@@ -130,9 +273,7 @@ export default function SupervisorMovimientos({ onLogout }) {
     if (tab === "movimientos") cargarMovimientos();
   }, [tab]);
 
-  /* =========================
-   *        ESCANEOS
-   * ========================= */
+  /* ========== ESCANEOS ========== */
   const [from, setFrom] = useState(fmtDateISO());
   const [to, setTo] = useState(fmtDateISO());
   const [turno, setTurno] = useState("");
@@ -178,13 +319,28 @@ export default function SupervisorMovimientos({ onLogout }) {
     return [...prefer.filter((k) => set.has(k)), ...tail];
   }, [escaneos]);
 
+  // === Exportador con el MISMO formato (Resumen + Detalle) que Almacén
+  const exportEscaneosExcel = () => {
+    if (!escaneos.length) return;
+    const wb = buildWorkbookEscaneos({
+      registros: escaneos,
+      turno, // filtro seleccionado (si quieres puedes dejar string vacío para "Todos")
+      responsable: "Supervisor",
+    });
+    const nombre = `escaneos_almacen_${from}_a_${to}.xlsx`;
+    XLSX.writeFile(wb, nombre);
+  };
+
   useEffect(() => {
     if (tab === "escaneos") cargarEscaneos();
   }, [tab]);
 
+  /* =========================
+   *  UI
+   * ========================= */
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-      {/* Header con Cerrar sesión */}
+      {/* Header */}
       <div className="mb-4 rounded-2xl border border-emerald-200 bg-white p-3 flex items-center gap-3">
         <h2 className="text-emerald-900 font-semibold">Panel del Supervisor</h2>
         <div className="ml-auto">
@@ -221,7 +377,7 @@ export default function SupervisorMovimientos({ onLogout }) {
         </button>
       </div>
 
-      {/* ====== Pestaña MOVIMIENTOS ====== */}
+      {/* ====== Movimientos ====== */}
       {tab === "movimientos" && (
         <div className="bg-white rounded-2xl border border-emerald-200 p-4 shadow-sm">
           <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
@@ -326,7 +482,7 @@ export default function SupervisorMovimientos({ onLogout }) {
         </div>
       )}
 
-      {/* ====== Pestaña ESCANEOS ====== */}
+      {/* ====== Escaneos ====== */}
       {tab === "escaneos" && (
         <div className="bg-white rounded-2xl border border-emerald-200 p-4 shadow-sm">
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
@@ -371,13 +527,13 @@ export default function SupervisorMovimientos({ onLogout }) {
           </div>
 
           <div className="mt-3 flex gap-2">
-            {/* ⬇️ Mismo Excel que en el patio, reutilizado */}
-            <AlmacenExportExcel
-              turno={turno}
-              responsable={"Supervisor"}
-              registros={escaneos}
-              filePrefix="escaneos_supervisor"
-            />
+            <button
+              onClick={exportEscaneosExcel}
+              disabled={!escaneos.length}
+              className="px-3 py-1.5 rounded bg-emerald-700 text-white text-sm disabled:opacity-50"
+            >
+              Exportar Excel
+            </button>
             <div className="ml-auto text-sm text-emerald-800">
               Total: <b>{escaneos.length}</b>
             </div>
