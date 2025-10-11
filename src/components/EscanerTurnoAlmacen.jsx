@@ -97,15 +97,27 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
 
   // --- API: obtener palet creado por encargada HOY por código
   const fetchPaletByCode = async (codigo) => {
-    const res = await fetch(
-      `${
-        import.meta.env.VITE_BACKEND_URL
-      }/api/palets/by-code?code=${encodeURIComponent(
-        codigo
-      )}&date=${todayStr()}`,
-      { headers: { "Content-Type": "application/json", ...getAuthHeader() } }
-    );
-    if (!res.ok) throw new Error("No se pudo obtener el palet");
+    const params = new URLSearchParams({
+      code: codigo,
+      date: todayStr(),
+      ...(turno ? { turno } : {}), // ← opcional, pero útil
+    }).toString();
+
+    const url = `${
+      import.meta.env.VITE_BACKEND_URL
+    }/api/palets/by-code?${params}`;
+    const res = await fetch(url, {
+      headers: { "Content-Type": "application/json", ...getAuthHeader() },
+    });
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      console.error("❌ /by-code fallo:", res.status, txt);
+      throw new Error(
+        `(${res.status}) ${txt.slice(0, 200) || "Fallo en /by-code"}`
+      );
+    }
+
     const data = await res.json().catch(() => ({}));
     return data || null;
   };
