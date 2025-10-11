@@ -20,6 +20,7 @@
     "html5-qrcode": "^2.3.8",
     "jsonwebtoken": "^9.0.2",
     "jspdf": "^3.0.1",
+    "luxon": "^3.7.2",
     "mongoose": "^8.14.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

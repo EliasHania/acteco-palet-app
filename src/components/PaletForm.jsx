@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
 import QrScanner from "./QrScanner";
 import { motion, AnimatePresence } from "framer-motion";
+import { DateTime } from "luxon";
 
 const PaletForm = ({
   setPalets,
   encargada,
-  refrescarPalets,
+  refrescarPalets, // espera una fecha 'YYYY-MM-DD' (día en Madrid)
   palets,
-  fechaSeleccionada,
+  fechaSeleccionada, // si lo usas externamente, no es imprescindible aquí
 }) => {
   const [codigo, setCodigo] = useState("");
   const [trabajadora, setTrabajadora] = useState("");
@@ -24,16 +25,18 @@ const PaletForm = ({
 
   const [listaTrabajadoras, setListaTrabajadoras] = useState([]);
 
+  // Autocierre de toasts
   useEffect(() => {
     if (mostrarAlerta || mostrarConfirmacion) {
-      const timeout = setTimeout(() => {
+      const t = setTimeout(() => {
         setMostrarAlerta(false);
         setMostrarConfirmacion(false);
       }, 3000);
-      return () => clearTimeout(timeout);
+      return () => clearTimeout(t);
     }
   }, [mostrarAlerta, mostrarConfirmacion]);
 
+  // Carga de trabajadoras
   useEffect(() => {
     const cargarTrabajadoras = async () => {
       try {
@@ -42,13 +45,11 @@ const PaletForm = ({
         const res = await fetch(
           `${import.meta.env.VITE_BACKEND_URL}/api/trabajadoras`,
           {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+            headers: { Authorization: `Bearer ${token}` },
           }
         );
         const data = await res.json();
-        setListaTrabajadoras(data);
+        setListaTrabajadoras(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Error al cargar trabajadoras:", err);
       }
@@ -61,37 +62,17 @@ const PaletForm = ({
     e.preventDefault();
     setLoading(true);
 
+    // El servidor sellará el timestamp (y valida la ventana del día en Europe/Madrid)
     const nuevoPalet = {
       codigo,
       trabajadora,
       tipo,
-      timestamp: new Date().toISOString(),
-      registradaPor: encargada.trim().toLowerCase(), // 👈 AÑADIDO: nombre de quien registra (yoana o lidia)
+      registradaPor: (encargada || "").trim().toLowerCase(), // 'yoana' | 'lidia'
     };
 
     try {
       const token =
         localStorage.getItem("token") || sessionStorage.getItem("token");
-
-      const res = await fetch(
-        `${import.meta.env.VITE_BACKEND_URL}/api/palets`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      const existentes = await res.json();
-
-      const hoy = new Date().toISOString().split("T")[0];
-      const yaExiste = existentes.some(
-        (p) => p.codigo === codigo && p.timestamp.startsWith(hoy)
-      );
-
-      if (yaExiste) {
-        setMensajeError("⚠️ Este código QR ya ha sido registrado hoy.");
-        setMostrarAlerta(true);
-        setLoading(false);
-        return;
-      }
 
       const resPost = await fetch(
         `${import.meta.env.VITE_BACKEND_URL}/api/palets`,
@@ -105,18 +86,32 @@ const PaletForm = ({
         }
       );
 
-      if (!resPost.ok) throw new Error("Error al guardar palet");
+      if (resPost.status === 409) {
+        // Duplicado en el día (según Europe/Madrid)
+        setMensajeError("⚠️ Este código QR ya ha sido registrado hoy.");
+        setMostrarAlerta(true);
+        return;
+      }
 
-      setTimeout(() => refrescarPalets(fechaSeleccionada), 100);
+      if (!resPost.ok) {
+        throw new Error("Error al guardar palet");
+      }
 
+      // Limpiar formulario
       setCodigo("");
       setTrabajadora("");
       setTipo("");
 
+      // Refrescar listado de HOY en Madrid
+      const hoyMadrid = DateTime.now().setZone("Europe/Madrid").toISODate(); // YYYY-MM-DD
+      if (typeof refrescarPalets === "function") {
+        await refrescarPalets(hoyMadrid);
+      }
+
       setMensajeConfirmacion("✅ Palet guardado correctamente.");
       setMostrarConfirmacion(true);
     } catch (err) {
-      console.error("Error:", err.message);
+      console.error("Error:", err);
       setMensajeError("Error inesperado al guardar palet.");
       setMostrarAlerta(true);
     } finally {
@@ -176,6 +171,7 @@ const PaletForm = ({
         )}
       </AnimatePresence>
 
+      {/* Scanner QR */}
       {mostrarScanner && (
         <div className="col-span-full relative">
           <QrScanner
@@ -214,6 +210,7 @@ const PaletForm = ({
         </div>
       )}
 
+      {/* Campos */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <input
           type="text"
@@ -223,6 +220,7 @@ const PaletForm = ({
           className="p-3 rounded-xl border border-green-300 focus:ring-2 focus:ring-green-400"
           required
         />
+
         <select
           value={trabajadora}
           onChange={(e) => setTrabajadora(e.target.value)}
@@ -230,12 +228,13 @@ const PaletForm = ({
           required
         >
           <option value="">Selecciona trabajadora</option>
-          {listaTrabajadoras.map((nombre, index) => (
-            <option key={index} value={nombre}>
+          {listaTrabajadoras.map((nombre, idx) => (
+            <option key={idx} value={nombre}>
               {nombre}
             </option>
           ))}
         </select>
+
         <select
           value={tipo}
           onChange={(e) => setTipo(e.target.value)}
