@@ -1,27 +1,26 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import * as XLSX from "xlsx";
 
 export default function EscanerTurnoAlmacen({ onLogout }) {
   const readerId = "almacen-qr-reader";
 
-  // ---- LocalStorage keys
+  // ===== LocalStorage keys
   const LS_KEYS = {
     turno: "almacen.turno",
     responsable: "almacen.responsable",
-    scansOK: (date, turno) => `almacen.scansOK.${date}.${turno}`, // persiste solo OK
   };
 
-  // ---- Refs cámara
+  // ===== Refs cámara / html5-qrcode
   const qrRef = useRef(null);
   const mediaTrackRef = useRef(null);
   const initializedRef = useRef(false);
   const startedRef = useRef(false);
   const wantStartRef = useRef(false);
 
-  // ---- Estado UI
+  // ===== UI
   const [cameraActive, setCameraActive] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const [cameraError, setCameraError] = useState(null);
@@ -30,25 +29,23 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
     type: "idle",
   });
 
-  // ---- Turno / responsable / trazas
+  // ===== Datos de usuario / sesión
   const [turno, setTurno] = useState(""); // "yoana" | "lidia"
   const [responsable, setResponsable] = useState(""); // nombre
-  const [scans, setScans] = useState([]); // SOLO OK: {code, ts}
-  const [warnCount, setWarnCount] = useState(0); // incidencias de sesión
+  const [incidents, setIncidents] = useState(0); // contador de incidencias
 
-  // ---- Modal palet y guardado
+  // Lista mostrada a la derecha: SIEMPRE lo guardado en BD hoy+turno
+  const [okScans, setOkScans] = useState([]); // documentos de /almacen/escaneos (día+turno)
+
+  // Modal de confirmación
   const [pendingPalet, setPendingPalet] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  // ---- Búsqueda manual
-  const [manualCode, setManualCode] = useState("");
-  const [manualResult, setManualResult] = useState(null); // objeto palet encontrado
-
-  // ---- Estética
+  // Fondo radial
   const pageRef = useRef(null);
   const anchorRef = useRef(null);
 
-  // ---- Anti-repetidos por rebote del lector
+  // Antirebote lector
   const lastCodeRef = useRef({ code: "", ts: 0 });
 
   const todayStr = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD
@@ -57,6 +54,14 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
     const token =
       localStorage.getItem("token") || sessionStorage.getItem("token");
     return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
+  const api = async (path, opts = {}) => {
+    const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}${path}`, {
+      headers: { "Content-Type": "application/json", ...getAuthHeader() },
+      ...opts,
+    });
+    return res;
   };
 
   const beep = () => {
@@ -74,13 +79,13 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
     } catch {}
   };
 
-  // ================== Persistencia turno / responsable ==================
+  // ====== Autocargar / Autoguardar turno + responsable
   useEffect(() => {
     try {
-      const savedTurno = localStorage.getItem(LS_KEYS.turno);
-      const savedResp = localStorage.getItem(LS_KEYS.responsable);
-      if (savedTurno) setTurno(savedTurno);
-      if (savedResp) setResponsable(savedResp);
+      const t = localStorage.getItem(LS_KEYS.turno);
+      const r = localStorage.getItem(LS_KEYS.responsable);
+      if (t) setTurno(t);
+      if (r) setResponsable(r);
     } catch {}
   }, []);
 
@@ -99,151 +104,53 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
     } catch {}
   }, [responsable]);
 
-  // ================== Persistencia de escaneos OK por día+turno ==================
-  const loadOKFromStorage = () => {
-    if (!turno) return;
-    try {
-      const key = LS_KEYS.scansOK(todayStr(), turno);
-      const raw = localStorage.getItem(key);
-      setScans(raw ? JSON.parse(raw) : []);
-    } catch {
-      setScans([]);
-    }
-  };
-
-  useEffect(() => {
-    // Cargar al cambiar de turno o al montar
-    loadOKFromStorage();
-    // Reiniciar contador de incidencias al cambiar de turno
-    setWarnCount(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [turno]);
-
-  useEffect(() => {
-    // Guardar siempre que cambien los OK
-    if (!turno) return;
-    try {
-      const key = LS_KEYS.scansOK(todayStr(), turno);
-      localStorage.setItem(key, JSON.stringify(scans));
-    } catch {}
-  }, [scans, turno]);
-
-  // ================== API helpers ==================
+  // ====== Helpers de datos
   const fetchPaletByCode = async (codigo) => {
-    const res = await fetch(
-      `${
-        import.meta.env.VITE_BACKEND_URL
-      }/api/palets/by-code?code=${encodeURIComponent(
-        codigo
-      )}&date=${todayStr()}`,
-      { headers: { "Content-Type": "application/json", ...getAuthHeader() } }
-    );
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json().catch(() => ({}));
-    return data || null;
+    const url = `/api/palets/by-code?code=${encodeURIComponent(
+      codigo
+    )}&date=${todayStr()}${turno ? `&turno=${turno}` : ""}`;
+    const res = await api(url);
+    if (!res.ok) throw new Error("No se pudo consultar el palet");
+    return await res.json();
   };
 
-  const checkAlreadySavedToday = async (codigo) => {
-    // Comprueba si ya existe en colección de Almacén para este día
-    const qs = new URLSearchParams({ fecha: todayStr(), codigo }).toString();
-    const res = await fetch(
-      `${import.meta.env.VITE_BACKEND_URL}/api/almacen/escaneos/fecha?${qs}`,
-      { headers: { "Content-Type": "application/json", ...getAuthHeader() } }
-    );
-    if (!res.ok) return false;
-    const rows = await res.json().catch(() => []);
-    return (
-      Array.isArray(rows) &&
-      rows.some((r) => String(r.codigo) === String(codigo))
-    );
+  const fetchEscaneosHoyTurno = async () => {
+    if (!turno) return setOkScans([]);
+    const qs = new URLSearchParams({ fecha: todayStr(), turno }).toString();
+    const res = await api(`/api/almacen/escaneos/fecha?${qs}`);
+    if (!res.ok) throw new Error("No se pudieron cargar escaneos");
+    const datos = await res.json();
+    setOkScans(Array.isArray(datos) ? datos : []);
   };
 
   const savePaletToAlmacen = async (paletObj) => {
-    const now = new Date();
     const payload = {
       ...paletObj,
       origen: "almacen",
       turno,
       responsableEscaneo: responsable,
       fecha: todayStr(),
-      timestamp: now.toISOString(),
+      timestamp: new Date().toISOString(),
       codigo: paletObj?.codigo || paletObj?.qr || "",
     };
-    const res = await fetch(
-      `${import.meta.env.VITE_BACKEND_URL}/api/almacen/escaneos`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeader() },
-        body: JSON.stringify(payload),
-      }
-    );
+    const res = await api(`/api/almacen/escaneos`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err?.msg || `HTTP ${res.status}`);
+      throw new Error(err?.msg || "No se pudo guardar el escaneo de almacén");
     }
-    return await res.json().catch(() => ({}));
+    return await res.json();
   };
 
-  // ================== Lógica de llegada de código ==================
-  const addOKLocally = (code) => {
-    // No duplicar en la lista de la derecha
-    if (scans.some((s) => s.code === code)) return;
-    setScans((prev) => [{ code, ts: new Date().toISOString() }, ...prev]);
-  };
+  // ====== Arranque / cambios de turno
+  useEffect(() => {
+    // cada vez que haya turno (y al cargar), trae lo guardado en BD
+    if (turno) fetchEscaneosHoyTurno().catch(() => {});
+  }, [turno]);
 
-  const addWarnOnly = () => setWarnCount((n) => n + 1); // no añade a lista
-
-  const processCode = async (decodedText) => {
-    setStatus({ text: "Buscando palet del día…", type: "loading" });
-    try {
-      const palet = await fetchPaletByCode(decodedText);
-
-      if (palet) {
-        // ¿Ya guardado en Almacén hoy?
-        const yaGuardado = await checkAlreadySavedToday(
-          palet.codigo || palet.qr || decodedText
-        );
-        if (yaGuardado) {
-          setStatus({
-            text: "⚠️ Palet ya guardado hoy en Almacén",
-            type: "warn",
-          });
-          addWarnOnly();
-          navigator.vibrate?.(120);
-          return;
-        }
-        // Abrir modal de confirmación
-        setPendingPalet(palet);
-        setStatus({ text: "Palet encontrado. Revisa y añade.", type: "ok" });
-        beep();
-      } else {
-        setStatus({ text: "⚠️ Sin alta hoy con ese código", type: "warn" });
-        addWarnOnly();
-        navigator.vibrate?.(150);
-      }
-    } catch {
-      setStatus({ text: "Error consultando la BD", type: "error" });
-      navigator.vibrate?.(200);
-    } finally {
-      setTimeout(
-        () => setStatus({ text: "Apunta al código…", type: "idle" }),
-        900
-      );
-    }
-  };
-
-  // ================== Eventos cámara ==================
-  const handleCheck = async (decodedText) => {
-    const now = Date.now();
-    if (
-      lastCodeRef.current.code === decodedText &&
-      now - lastCodeRef.current.ts < 1200
-    )
-      return;
-    lastCodeRef.current = { code: decodedText, ts: now };
-    processCode(decodedText);
-  };
-
+  // ====== Lector
   const startCamera = async () => {
     setCameraError(null);
     setStatus({ text: "Inicializando cámara…", type: "loading" });
@@ -347,21 +254,84 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
     } catch {}
   };
 
-  // ================== Export Excel (solo OK) ==================
+  // ====== Lógica al leer un QR (cámara)
+  const handleCheck = async (decodedText) => {
+    const now = Date.now();
+    if (
+      lastCodeRef.current.code === decodedText &&
+      now - lastCodeRef.current.ts < 1200
+    )
+      return;
+    lastCodeRef.current = { code: decodedText, ts: now };
+
+    setStatus({ text: "Comprobando…", type: "loading" });
+
+    try {
+      // 1) ¿Existe palet en Encargadas hoy?
+      const palet = await fetchPaletByCode(decodedText);
+
+      if (!palet) {
+        // sólo informar; NO se añade a la lista (como pediste)
+        setIncidents((n) => n + 1);
+        setStatus({ text: "⚠️ Palet sin alta hoy", type: "warn" });
+        navigator.vibrate?.(120);
+        return;
+      }
+
+      // 2) ¿Ya está guardado en Almacén hoy para este turno?
+      const ya = okScans.some(
+        (e) =>
+          String(e.codigo || "").toLowerCase() ===
+          String(decodedText).toLowerCase()
+      );
+
+      if (ya) {
+        setStatus({
+          text: "⚠️ Palet ya guardado hoy en Almacén",
+          type: "warn",
+        });
+        // Asegura que la lista esté actualizada desde BD (por si lo guardó otro dispositivo)
+        fetchEscaneosHoyTurno().catch(() => {});
+        return;
+      }
+
+      // 3) Abrir modal de confirmación
+      setPendingPalet(palet);
+      setStatus({ text: "Palet encontrado. Revisa y añade.", type: "ok" });
+      beep();
+    } catch {
+      setStatus({ text: "Error consultando la BD", type: "error" });
+    } finally {
+      setTimeout(
+        () => setStatus({ text: "Apunta al código…", type: "idle" }),
+        900
+      );
+    }
+  };
+
+  // ====== Excel (lista derecha, con lo que hay en BD)
   const exportExcel = () => {
-    if (!scans.length) return;
-    const rows = scans
+    if (!okScans.length) return;
+    const rows = okScans
       .slice()
-      .reverse()
+      .sort(
+        (a, b) =>
+          new Date(a.timestamp || a.createdAt || 0) -
+          new Date(b.timestamp || b.createdAt || 0)
+      )
       .map((s) => ({
-        Fecha: new Date(s.ts).toLocaleDateString("sv-SE"),
-        Hora: new Date(s.ts).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        Código: s.code,
-        Turno: turno || "",
-        Responsable: responsable || "",
+        Fecha: s.timestamp
+          ? new Date(s.timestamp).toLocaleDateString("sv-SE")
+          : todayStr(),
+        Hora: s.timestamp
+          ? new Date(s.timestamp).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "",
+        Código: s.codigo || "",
+        Turno: s.turno || "",
+        Responsable: s.responsableEscaneo || "",
       }));
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -373,11 +343,11 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
       );
       return { wch: Math.min(Math.max(maxLen + 2, 12), 50) };
     });
-    XLSX.utils.book_append_sheet(wb, ws, "Lecturas OK");
-    XLSX.writeFile(wb, `almacen_ok_${todayStr()}_${turno || "todos"}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, "Escaneos Almacén");
+    XLSX.writeFile(wb, `almacen_${todayStr()}_${turno || "todos"}.xlsx`);
   };
 
-  // ================== Fondo radial ==================
+  // ====== Fondo radial (cosmético)
   const updateRadialCenter = () => {
     const root = pageRef.current;
     const anchor = anchorRef.current;
@@ -403,16 +373,47 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
 
   const showTorch = !!mediaTrackRef.current?.getCapabilities?.()?.torch;
 
-  // ================== Búsqueda manual ==================
-  const handleManualSearch = async () => {
-    const code = (manualCode || "").trim();
-    if (!code) return;
-    await processCode(code); // mismo flujo que cámara
-  };
+  // ====== Contadores (lista derecha = sólo OK)
+  const totalOK = okScans.length;
+  const warnCount = incidents;
 
-  // ================== Contadores (solo OK listados) ==================
-  const total = scans.length;
-  const okCount = scans.length;
+  // ====== Búsqueda manual (sin cámara)
+  const [manualCode, setManualCode] = useState("");
+  const handleManualSearch = async () => {
+    const code = manualCode.trim();
+    if (!code) return;
+    setStatus({ text: "Buscando palet…", type: "loading" });
+    try {
+      const palet = await fetchPaletByCode(code);
+      if (!palet) {
+        setIncidents((n) => n + 1);
+        setStatus({ text: "⚠️ Palet sin alta hoy", type: "warn" });
+        return;
+      }
+      const ya = okScans.some(
+        (e) =>
+          String(e.codigo || "").toLowerCase() === String(code).toLowerCase()
+      );
+      if (ya) {
+        setStatus({
+          text: "⚠️ Palet ya guardado hoy en Almacén",
+          type: "warn",
+        });
+        fetchEscaneosHoyTurno().catch(() => {});
+        return;
+      }
+      setPendingPalet(palet);
+      setStatus({ text: "Palet encontrado. Revisa y añade.", type: "ok" });
+      beep();
+    } catch {
+      setStatus({ text: "Error consultando la BD", type: "error" });
+    } finally {
+      setTimeout(
+        () => setStatus({ text: "Apunta al código…", type: "idle" }),
+        900
+      );
+    }
+  };
 
   return (
     <div
@@ -465,7 +466,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
       {/* CONTENIDO */}
       <main className="w-full max-w-6xl mx-auto px-4 sm:px-6 pb-8 mt-4">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* BOX 1: Cámara + Manual */}
+          {/* BOX 1: Cámara + búsqueda manual */}
           <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-white/30 shadow-xl p-6">
             <h3 className="text-lg font-semibold text-emerald-900 mb-4">
               📷 Escáner QR
@@ -496,7 +497,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
                   className="flex flex-col items-center gap-5 py-6"
                 >
                   <div className="relative">
-                    <span className="absolute inset-0 rounded-full animate-ping bg-emerald-400/30"></span>
+                    <span className="absolute inset-0 rounded-full animate-ping bg-emerald-400/30" />
                     <button
                       onClick={handleOpen}
                       className="relative w-28 h-28 rounded-full bg-emerald-600 text-white shadow-2xl hover:bg-emerald-700 active:scale-95 transition flex items-center justify-center"
@@ -543,12 +544,10 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
                       >
                         Cerrar cámara
                       </button>
-
                       <div
                         id={readerId}
                         className="relative w-[340px] h-[340px] bg-black rounded-2xl"
                       />
-
                       {[
                         "top-0 left-0",
                         "top-0 right-0",
@@ -564,7 +563,6 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
                           }`}
                         />
                       ))}
-
                       <div className="pointer-events-none absolute inset-0 flex items-end justify-center p-3">
                         <div
                           className={`px-3 py-2 rounded-lg text-white text-sm font-semibold ${
@@ -622,8 +620,8 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
               )}
             </div>
 
-            {/* Búsqueda manual (sin depuración) */}
-            <div className="mt-6 border-t border-emerald-200 pt-4">
+            {/* BÚSQUEDA MANUAL */}
+            <div className="mt-6 border-t border-emerald-200 pt-4 w-full">
               <div className="text-emerald-900 font-semibold mb-2">
                 ⌨️ Búsqueda manual (sin cámara)
               </div>
@@ -644,7 +642,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
               </div>
             </div>
 
-            {/* MODAL de confirmación */}
+            {/* MODAL: confirmar y guardar */}
             {pendingPalet && (
               <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
                 <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-emerald-200 overflow-hidden">
@@ -692,29 +690,16 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
                       onClick={async () => {
                         try {
                           setSaving(true);
-                          const codigo =
-                            pendingPalet?.codigo || pendingPalet?.qr || "";
-                          // Evitar doble guardado
-                          const already = await checkAlreadySavedToday(codigo);
-                          if (already) {
-                            setSaving(false);
-                            setStatus({
-                              text: "⚠️ Palet ya guardado hoy en Almacén",
-                              type: "warn",
-                            });
-                            setPendingPalet(null);
-                            addWarnOnly();
-                            return;
-                          }
                           await savePaletToAlmacen(pendingPalet);
-                          setPendingPalet(null);
                           setSaving(false);
+                          setPendingPalet(null);
                           setStatus({
                             text: "✅ Añadido a Almacén",
                             type: "ok",
                           });
-                          addOKLocally(codigo);
                           beep();
+                          // refresca lista desde BD para que aparezca a la derecha
+                          fetchEscaneosHoyTurno().catch(() => {});
                         } catch (e) {
                           setSaving(false);
                           setStatus({
@@ -737,7 +722,6 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
                     >
                       {saving ? "Guardando…" : "➕ Añadir a Almacén"}
                     </button>
-
                     <button
                       onClick={() => setPendingPalet(null)}
                       disabled={saving}
@@ -751,7 +735,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
             )}
           </div>
 
-          {/* BOX 2: Lista de palets (SOLO OK) */}
+          {/* BOX 2: Lista (ahora SIEMPRE lo de BD) */}
           <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-white/30 shadow-xl p-6 flex flex-col">
             <div className="flex items-center gap-3 mb-4">
               <h3 className="text-lg font-semibold text-emerald-900">
@@ -759,10 +743,10 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
               </h3>
               <div className="ml-auto text-xs flex items-center gap-2">
                 <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-200 font-medium">
-                  Total: {total}
+                  Total: {totalOK}
                 </span>
                 <span className="px-2 py-0.5 rounded bg-green-100 text-green-700 border border-green-200 font-medium">
-                  ✓ {okCount}
+                  ✓ {totalOK}
                 </span>
                 <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 font-medium">
                   ⚠ {warnCount}
@@ -772,35 +756,44 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
 
             <div className="flex-1 min-h-[400px] rounded-lg border border-emerald-200 bg-white overflow-hidden flex flex-col">
               <div className="flex-1 overflow-y-auto">
-                {!scans.length && (
+                {!okScans.length && (
                   <div className="p-6 text-center text-sm text-emerald-700/70">
                     Aún no hay lecturas OK en esta sesión.
                   </div>
                 )}
-                {!!scans.length && (
+                {!!okScans.length && (
                   <ul className="divide-y divide-emerald-100">
-                    {scans.map((s, i) => (
-                      <li
-                        key={i}
-                        className="px-4 py-3 flex items-center gap-3 text-sm hover:bg-emerald-50/50 transition"
-                      >
-                        <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
-                        <span className="font-mono text-emerald-900 font-medium">
-                          {s.code}
-                        </span>
-                        <span className="ml-auto text-xs text-emerald-700/70 flex items-center gap-2">
-                          <span>
-                            {new Date(s.ts).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                    {okScans
+                      .slice()
+                      .sort(
+                        (a, b) =>
+                          new Date(b.timestamp || b.createdAt || 0) -
+                          new Date(a.timestamp || a.createdAt || 0)
+                      )
+                      .map((s) => (
+                        <li
+                          key={s._id}
+                          className="px-4 py-3 flex items-center gap-3 text-sm hover:bg-emerald-50/50 transition"
+                        >
+                          <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
+                          <span className="font-mono text-emerald-900 font-medium">
+                            {s.codigo}
                           </span>
-                          <span className="px-2 py-0.5 rounded bg-green-100 text-green-700">
-                            OK
+                          <span className="ml-auto text-xs text-emerald-700/70 flex items-center gap-2">
+                            <span>
+                              {s.timestamp
+                                ? new Date(s.timestamp).toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })
+                                : ""}
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-green-100 text-green-700">
+                              OK
+                            </span>
                           </span>
-                        </span>
-                      </li>
-                    ))}
+                        </li>
+                      ))}
                   </ul>
                 )}
               </div>
@@ -809,17 +802,16 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
             <div className="mt-4 flex gap-2">
               <button
                 onClick={exportExcel}
-                disabled={!scans.length}
+                disabled={!okScans.length}
                 className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm"
               >
                 📊 Descargar Excel
               </button>
               <button
-                onClick={() => setScans([])}
-                disabled={!scans.length}
-                className="px-4 py-2.5 rounded-lg bg-white text-emerald-800 border border-emerald-300 hover:bg-emerald-50 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition"
+                onClick={() => setIncidents(0)}
+                className="px-4 py-2.5 rounded-lg bg-white text-emerald-800 border border-emerald-300 hover:bg-emerald-50 text-sm font-medium transition"
               >
-                🗑️ Limpiar
+                🧹 Limpiar incidencias
               </button>
             </div>
           </div>
