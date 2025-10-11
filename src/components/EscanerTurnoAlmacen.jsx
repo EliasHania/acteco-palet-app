@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import * as XLSX from "xlsx";
 
@@ -46,6 +46,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
   const anchorRef = useRef(null);
 
   // Antirebote lector
+  the_last_code:
   const lastCodeRef = useRef({ code: "", ts: 0 });
 
   const todayStr = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD
@@ -146,7 +147,6 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
 
   // ====== Arranque / cambios de turno
   useEffect(() => {
-    // cada vez que haya turno (y al cargar), trae lo guardado en BD
     if (turno) fetchEscaneosHoyTurno().catch(() => {});
   }, [turno]);
 
@@ -271,7 +271,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
       const palet = await fetchPaletByCode(decodedText);
 
       if (!palet) {
-        // sólo informar; NO se añade a la lista (como pediste)
+        // sólo informar; NO se añade a la lista
         setIncidents((n) => n + 1);
         setStatus({ text: "⚠️ Palet sin alta hoy", type: "warn" });
         navigator.vibrate?.(120);
@@ -290,7 +290,6 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
           text: "⚠️ Palet ya guardado hoy en Almacén",
           type: "warn",
         });
-        // Asegura que la lista esté actualizada desde BD (por si lo guardó otro dispositivo)
         fetchEscaneosHoyTurno().catch(() => {});
         return;
       }
@@ -379,15 +378,24 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
 
   // ====== Búsqueda manual (sin cámara)
   const [manualCode, setManualCode] = useState("");
+  const [manualNotice, setManualNotice] = useState(null); // {type:'ok'|'warn'|'error', text:string}
+
+  const showManual = (type, text, ms = 3500) => {
+    setManualNotice({ type, text });
+    if (ms) setTimeout(() => setManualNotice(null), ms);
+  };
+
   const handleManualSearch = async () => {
     const code = manualCode.trim();
     if (!code) return;
+
     setStatus({ text: "Buscando palet…", type: "loading" });
     try {
       const palet = await fetchPaletByCode(code);
       if (!palet) {
         setIncidents((n) => n + 1);
         setStatus({ text: "⚠️ Palet sin alta hoy", type: "warn" });
+        showManual("error", "❌ Palet sin alta hoy en Encargadas.");
         return;
       }
       const ya = okScans.some(
@@ -399,14 +407,17 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
           text: "⚠️ Palet ya guardado hoy en Almacén",
           type: "warn",
         });
+        showManual("warn", "⚠️ Este palet ya fue guardado hoy en Almacén.");
         fetchEscaneosHoyTurno().catch(() => {});
         return;
       }
       setPendingPalet(palet);
       setStatus({ text: "Palet encontrado. Revisa y añade.", type: "ok" });
+      showManual("ok", "✅ Palet encontrado. Abriendo confirmación…");
       beep();
     } catch {
       setStatus({ text: "Error consultando la BD", type: "error" });
+      showManual("error", "❌ Error consultando la base de datos.");
     } finally {
       setTimeout(
         () => setStatus({ text: "Apunta al código…", type: "idle" }),
@@ -635,7 +646,6 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
                   className="flex-1 px-3 py-2 rounded-lg border bg-white text-emerald-900 placeholder-emerald-500 border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-500"
                   style={{ WebkitTextFillColor: "#064e3b" }}
                 />
-
                 <button
                   onClick={handleManualSearch}
                   className="px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-sm font-medium"
@@ -643,6 +653,21 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
                   Buscar manual
                 </button>
               </div>
+
+              {manualNotice && (
+                <div
+                  className={
+                    "mt-2 text-sm rounded-lg border px-3 py-2 " +
+                    (manualNotice.type === "ok"
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                      : manualNotice.type === "warn"
+                      ? "bg-amber-50 border-amber-200 text-amber-800"
+                      : "bg-rose-50 border-rose-200 text-rose-800")
+                  }
+                >
+                  {manualNotice.text}
+                </div>
+              )}
             </div>
 
             {/* MODAL: confirmar y guardar */}
@@ -738,7 +763,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
             )}
           </div>
 
-          {/* BOX 2: Lista (ahora SIEMPRE lo de BD) */}
+          {/* BOX 2: Lista (lo que hay en BD) */}
           <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-white/30 shadow-xl p-6 flex flex-col">
             <div className="flex items-center gap-3 mb-4">
               <h3 className="text-lg font-semibold text-emerald-900">
