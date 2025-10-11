@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import QrScanner from "./QrScanner";
 import { motion, AnimatePresence } from "framer-motion";
-import { DateTime } from "luxon";
 
 const PaletForm = ({
   setPalets,
@@ -25,9 +24,6 @@ const PaletForm = ({
 
   const [listaTrabajadoras, setListaTrabajadoras] = useState([]);
 
-  const hoyMadridISO = () =>
-    DateTime.now().setZone("Europe/Madrid").toISODate(); // YYYY-MM-DD
-
   useEffect(() => {
     if (mostrarAlerta || mostrarConfirmacion) {
       const timeout = setTimeout(() => {
@@ -46,7 +42,9 @@ const PaletForm = ({
         const res = await fetch(
           `${import.meta.env.VITE_BACKEND_URL}/api/trabajadoras`,
           {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
           }
         );
         const data = await res.json();
@@ -55,26 +53,45 @@ const PaletForm = ({
         console.error("Error al cargar trabajadoras:", err);
       }
     };
+
     cargarTrabajadoras();
   }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (loading) return;
     setLoading(true);
 
-    const payload = {
-      codigo: codigo.trim(),
+    const nuevoPalet = {
+      codigo,
       trabajadora,
       tipo,
-      // El backend ya fuerza timestamp de servidor, esto es opcional:
       timestamp: new Date().toISOString(),
-      registradaPor: (encargada || "").trim().toLowerCase(), // yoana | lidia
+      registradaPor: encargada.trim().toLowerCase(), // 👈 AÑADIDO: nombre de quien registra (yoana o lidia)
     };
 
     try {
       const token =
         localStorage.getItem("token") || sessionStorage.getItem("token");
+
+      const res = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/palets`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      const existentes = await res.json();
+
+      const hoy = new Date().toISOString().split("T")[0];
+      const yaExiste = existentes.some(
+        (p) => p.codigo === codigo && p.timestamp.startsWith(hoy)
+      );
+
+      if (yaExiste) {
+        setMensajeError("⚠️ Este código QR ya ha sido registrado hoy.");
+        setMostrarAlerta(true);
+        setLoading(false);
+        return;
+      }
 
       const resPost = await fetch(
         `${import.meta.env.VITE_BACKEND_URL}/api/palets`,
@@ -84,29 +101,14 @@ const PaletForm = ({
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(nuevoPalet),
         }
       );
 
-      if (resPost.status === 409) {
-        // Backend detectó duplicado “hoy (Madrid)”
-        setMensajeError("⚠️ Este código QR ya ha sido registrado hoy.");
-        setMostrarAlerta(true);
-        return;
-      }
+      if (!resPost.ok) throw new Error("Error al guardar palet");
 
-      if (!resPost.ok) {
-        const errTxt = await resPost.text().catch(() => "");
-        throw new Error(errTxt || "Error al guardar palet");
-      }
+      setTimeout(() => refrescarPalets(fechaSeleccionada), 100);
 
-      // Refrescamos por la fecha correcta (Madrid). Si tu refresco acepta fecha,
-      // pásale hoyMadridISO(); si no, simplemente llama a refrescarPalets().
-      if (typeof refrescarPalets === "function") {
-        refrescarPalets(fechaSeleccionada || hoyMadridISO());
-      }
-
-      // Limpia formulario
       setCodigo("");
       setTrabajadora("");
       setTipo("");

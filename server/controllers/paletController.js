@@ -2,17 +2,26 @@
 import Palet from "../models/Palet.js";
 import { DateTime } from "luxon";
 
-// Obtener todos los palets (opcional ?date=YYYY-MM-DD)
+/**
+ * Devuelve todos los palets.
+ * Opcional: ?date=YYYY-MM-DD (día en Europe/Madrid)
+ */
 export const getPalets = async (req, res) => {
   try {
     const { date } = req.query;
 
     const query = {};
     if (date) {
-      const start = DateTime.fromISO(date, { zone: "Europe/Madrid" })
+      const start = DateTime.fromISO(date, {
+        setZone: true,
+        zone: "Europe/Madrid",
+      })
         .startOf("day")
         .toJSDate();
-      const end = DateTime.fromISO(date, { zone: "Europe/Madrid" })
+      const end = DateTime.fromISO(date, {
+        setZone: true,
+        zone: "Europe/Madrid",
+      })
         .endOf("day")
         .toJSDate();
       query.timestamp = { $gte: start, $lte: end };
@@ -26,21 +35,47 @@ export const getPalets = async (req, res) => {
   }
 };
 
-// Crear un nuevo palet y emitir evento vía WebSocket
+/**
+ * Crea un palet nuevo.
+ * Valida que el mismo código no se haya registrado ya HOY (Europe/Madrid).
+ * Sella el timestamp en servidor usando hora de Madrid.
+ */
 export const createPalet = async (req, res) => {
-  const { trabajadora, tipo, timestamp, codigo, registradaPor } = req.body;
-
   try {
+    const { trabajadora, tipo, codigo, registradaPor } = req.body;
+
+    if (!codigo) {
+      return res.status(400).json({ msg: "Código requerido" });
+    }
+
+    // Hora oficial (día) en Madrid
+    const nowMadrid = DateTime.now().setZone("Europe/Madrid");
+    const start = nowMadrid.startOf("day").toJSDate();
+    const end = nowMadrid.endOf("day").toJSDate();
+
+    // ¿Ese código ya está hoy?
+    const yaExiste = await Palet.exists({
+      codigo,
+      timestamp: { $gte: start, $lte: end },
+    });
+
+    if (yaExiste) {
+      // 409 Conflict: duplicado en el mismo día
+      return res.status(409).json({ msg: "YA_REGISTRADO_HOY" });
+    }
+
+    // Guardamos con timestamp del servidor (no confiar en el cliente)
     const nuevoPalet = new Palet({
       trabajadora,
       tipo,
-      timestamp,
       codigo,
       registradaPor,
+      timestamp: nowMadrid.toJSDate(),
     });
+
     await nuevoPalet.save();
 
-    // Emitir a todos los clientes conectados el nuevo palet
+    // Emitimos evento a los clientes conectados
     const io = req.app.get("socketio");
     io.emit("nuevoPalet", nuevoPalet);
 
@@ -51,7 +86,9 @@ export const createPalet = async (req, res) => {
   }
 };
 
-// Eliminar todos los palets (solo admin)
+/**
+ * Elimina todos los palets (solo admin).
+ */
 export const deleteAll = async (req, res) => {
   try {
     await Palet.deleteMany();
@@ -62,7 +99,9 @@ export const deleteAll = async (req, res) => {
   }
 };
 
-// Eliminar todos los palets de una trabajadora (para Yoana o Lidia)
+/**
+ * Elimina todos los palets de una trabajadora concreta.
+ */
 export const deleteByTrabajadora = async (req, res) => {
   try {
     const { nombre } = req.params;
@@ -74,7 +113,9 @@ export const deleteByTrabajadora = async (req, res) => {
   }
 };
 
-// Eliminar un palet por ID
+/**
+ * Elimina un palet por ID.
+ */
 export const deletePaletPorId = async (req, res) => {
   try {
     await Palet.findByIdAndDelete(req.params.id);
@@ -85,27 +126,31 @@ export const deletePaletPorId = async (req, res) => {
   }
 };
 
-// Obtener palets por fecha (yyyy-mm-dd)
+/**
+ * Devuelve palets de un día concreto (yyyy-mm-dd) en Madrid.
+ */
 export const getPaletsPorFecha = async (req, res) => {
   try {
     const fecha = req.query.fecha;
     if (!fecha) return res.status(400).json({ msg: "Fecha requerida" });
 
-    const inicio = DateTime.fromISO(fecha, { zone: "Europe/Madrid" })
+    const inicio = DateTime.fromISO(fecha, {
+      setZone: true,
+      zone: "Europe/Madrid",
+    })
       .startOf("day")
       .toJSDate();
-    const fin = DateTime.fromISO(fecha, { zone: "Europe/Madrid" })
+    const fin = DateTime.fromISO(fecha, {
+      setZone: true,
+      zone: "Europe/Madrid",
+    })
       .endOf("day")
       .toJSDate();
-
-    console.log("📆 Inicio Madrid:", inicio.toISOString());
-    console.log("📆 Fin Madrid:", fin.toISOString());
 
     const palets = await Palet.find({
       timestamp: { $gte: inicio, $lte: fin },
     });
 
-    console.log("📦 Palets encontrados:", palets.length);
     res.json(palets);
   } catch (err) {
     console.error("❌ Error al obtener palets por fecha:", err);
@@ -113,7 +158,9 @@ export const getPaletsPorFecha = async (req, res) => {
   }
 };
 
-// Obtener un palet por código + fecha (opcional: turno = 'yoana' | 'lidia')
+/**
+ * Busca un palet por código + fecha (opcional: turno = 'yoana' | 'lidia')
+ */
 export const getPaletByCodeAndDate = async (req, res) => {
   try {
     const { code, date, turno } = req.query;
@@ -123,10 +170,13 @@ export const getPaletByCodeAndDate = async (req, res) => {
         .json({ msg: "Parámetros 'code' y 'date' requeridos" });
     }
 
-    const start = DateTime.fromISO(date, { zone: "Europe/Madrid" })
+    const start = DateTime.fromISO(date, {
+      setZone: true,
+      zone: "Europe/Madrid",
+    })
       .startOf("day")
       .toJSDate();
-    const end = DateTime.fromISO(date, { zone: "Europe/Madrid" })
+    const end = DateTime.fromISO(date, { setZone: true, zone: "Europe/Madrid" })
       .endOf("day")
       .toJSDate();
 
@@ -134,12 +184,6 @@ export const getPaletByCodeAndDate = async (req, res) => {
     if (turno) q.registradaPor = turno; // opcional
 
     const doc = await Palet.findOne(q).lean();
-    console.log("🔎 getPaletByCodeAndDate:", {
-      code,
-      date,
-      turno,
-      found: !!doc,
-    });
     return res.status(200).json(doc || null);
   } catch (err) {
     console.error("❌ Error en getPaletByCodeAndDate:", err);
