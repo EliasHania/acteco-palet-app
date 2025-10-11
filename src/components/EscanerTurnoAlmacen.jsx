@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import * as XLSX from "xlsx";
+import AlmacenExportExcel from "./components/AlmacenExportExcel";
 
 export default function EscanerTurnoAlmacen({ onLogout }) {
   const readerId = "almacen-qr-reader";
@@ -46,7 +47,6 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
   const anchorRef = useRef(null);
 
   // Antirebote lector
-  the_last_code:
   const lastCodeRef = useRef({ code: "", ts: 0 });
 
   const todayStr = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD
@@ -828,13 +828,11 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
             </div>
 
             <div className="mt-4 flex gap-2">
-              <button
-                onClick={exportExcel}
-                disabled={!okScans.length}
-                className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm"
-              >
-                📊 Descargar Excel
-              </button>
+              <AlmacenExportExcel
+                turno={turno}
+                responsable={responsable}
+                registros={okScans}
+              />
               <button
                 onClick={() => setIncidents(0)}
                 className="px-4 py-2.5 rounded-lg bg-white text-emerald-800 border border-emerald-300 hover:bg-emerald-50 text-sm font-medium transition"
