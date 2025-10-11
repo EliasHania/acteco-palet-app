@@ -1,6 +1,9 @@
 // AlmacenExportExcel.jsx
 import React from "react";
 import * as XLSX from "xlsx";
+import { DateTime } from "luxon";
+
+const ZONA = "Europe/Madrid";
 
 const perchasPorCaja = {
   "46x28": 45,
@@ -16,14 +19,6 @@ function cap(s = "") {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
 }
 
-/**
- * props:
- * - turno: "yoana" | "lidia"
- * - responsable: string
- * - registros: array de escaneos guardados en /api/almacen/escaneos (del día y turno)
- *   cada item suele traer: { trabajadora, tipo, codigo, timestamp, turno, responsableEscaneo, ...copia del palet }
- * - filePrefix?: string (opcional, default "almacen")
- */
 export default function AlmacenExportExcel({
   turno = "",
   responsable = "",
@@ -33,15 +28,9 @@ export default function AlmacenExportExcel({
   children,
 }) {
   const onExport = () => {
-    // ---- Título y fecha
-    const fecha = new Date();
-    const fechaTexto = fecha.toLocaleDateString("es-ES", {
-      weekday: "long",
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-    });
-
+    // ---- Título y fecha (Luxon + Madrid)
+    const ahora = DateTime.now().setZone(ZONA).setLocale("es");
+    const fechaTexto = ahora.toFormat("cccc dd 'de' LLLL 'de' yyyy");
     const titulo = `Resumen del turno de ${cap(turno)} – ${fechaTexto}`;
     const subtitulo = responsable
       ? `Responsable del escaneo: ${responsable}`
@@ -109,15 +98,12 @@ export default function AlmacenExportExcel({
     sheetResumen.push(["Total perchas estimadas:", totalPerchas]);
 
     const wsResumen = XLSX.utils.aoa_to_sheet(sheetResumen);
-    // Estética básica
-    wsResumen["!merges"] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }, // título
-    ];
+    wsResumen["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }];
     wsResumen["!cols"] = [{ wch: 36 }, { wch: 24 }, { wch: 36 }, { wch: 24 }];
 
     XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
 
-    // ---- Hoja 2: Detalle
+    // ---- Hoja 2: Detalle (Luxon para ordenar/mostrar)
     const detalleHeaders = [
       "Fecha",
       "Hora",
@@ -130,19 +116,21 @@ export default function AlmacenExportExcel({
 
     const detalleRows = registros
       .slice()
-      .sort(
-        (a, b) =>
-          new Date(a.timestamp || a.createdAt || 0) -
-          new Date(b.timestamp || b.createdAt || 0)
-      )
+      .sort((a, b) => {
+        const da = DateTime.fromISO(a.timestamp || a.createdAt || 0)
+          .setZone(ZONA)
+          .toMillis();
+        const db = DateTime.fromISO(b.timestamp || b.createdAt || 0)
+          .setZone(ZONA)
+          .toMillis();
+        return da - db;
+      })
       .map((r) => {
-        const d = r.timestamp ? new Date(r.timestamp) : null;
-        const fecha = d
-          ? d.toLocaleDateString("sv-SE")
-          : new Date().toLocaleDateString("sv-SE");
-        const hora = d
-          ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-          : "";
+        const d = r.timestamp
+          ? DateTime.fromISO(r.timestamp).setZone(ZONA)
+          : null;
+        const fecha = d ? d.toISODate() : ahora.toISODate(); // YYYY-MM-DD
+        const hora = d ? d.toFormat("HH:mm") : "";
         return [
           fecha,
           hora,
@@ -167,7 +155,7 @@ export default function AlmacenExportExcel({
     XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle");
 
     // ---- Guardar
-    const fechaArchivo = new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD
+    const fechaArchivo = ahora.toISODate(); // YYYY-MM-DD
     XLSX.writeFile(
       wb,
       `${filePrefix}_${fechaArchivo}_${turno || "todos"}.xlsx`

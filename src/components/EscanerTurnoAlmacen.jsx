@@ -4,6 +4,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import * as XLSX from "xlsx";
 import AlmacenExportExcel from "./AlmacenExportExcel.jsx";
+import { DateTime } from "luxon";
+
+const ZONA = "Europe/Madrid";
+const todayStr = () => DateTime.now().setZone(ZONA).toISODate(); // YYYY-MM-DD
+const nowISO = () => DateTime.now().setZone(ZONA).toISO(); // ISO con zona
+const humanTime = (iso) =>
+  iso ? DateTime.fromISO(iso).setZone(ZONA).toFormat("HH:mm") : "";
 
 export default function EscanerTurnoAlmacen({ onLogout }) {
   const readerId = "almacen-qr-reader";
@@ -48,8 +55,6 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
 
   // Antirebote lector
   const lastCodeRef = useRef({ code: "", ts: 0 });
-
-  const todayStr = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD
 
   const getAuthHeader = () => {
     const token =
@@ -131,7 +136,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
       turno,
       responsableEscaneo: responsable,
       fecha: todayStr(),
-      timestamp: new Date().toISOString(),
+      timestamp: nowISO(),
       codigo: paletObj?.codigo || paletObj?.qr || "",
     };
     const res = await api(`/api/almacen/escaneos`, {
@@ -315,23 +320,25 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
       .slice()
       .sort(
         (a, b) =>
-          new Date(a.timestamp || a.createdAt || 0) -
-          new Date(b.timestamp || b.createdAt || 0)
+          DateTime.fromISO(a.timestamp || a.createdAt || 0)
+            .setZone(ZONA)
+            .toMillis() -
+          DateTime.fromISO(b.timestamp || b.createdAt || 0)
+            .setZone(ZONA)
+            .toMillis()
       )
-      .map((s) => ({
-        Fecha: s.timestamp
-          ? new Date(s.timestamp).toLocaleDateString("sv-SE")
-          : todayStr(),
-        Hora: s.timestamp
-          ? new Date(s.timestamp).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : "",
-        Código: s.codigo || "",
-        Turno: s.turno || "",
-        Responsable: s.responsableEscaneo || "",
-      }));
+      .map((s) => {
+        const d = s.timestamp
+          ? DateTime.fromISO(s.timestamp).setZone(ZONA)
+          : null;
+        return {
+          Fecha: d ? d.toISODate() : todayStr(),
+          Hora: d ? d.toFormat("HH:mm") : "",
+          Código: s.codigo || "",
+          Turno: s.turno || "",
+          Responsable: s.responsableEscaneo || "",
+        };
+      });
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(rows);
     const headers = Object.keys(rows[0] || {});
@@ -795,8 +802,12 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
                       .slice()
                       .sort(
                         (a, b) =>
-                          new Date(b.timestamp || b.createdAt || 0) -
-                          new Date(a.timestamp || a.createdAt || 0)
+                          DateTime.fromISO(b.timestamp || b.createdAt || 0)
+                            .setZone(ZONA)
+                            .toMillis() -
+                          DateTime.fromISO(a.timestamp || a.createdAt || 0)
+                            .setZone(ZONA)
+                            .toMillis()
                       )
                       .map((s) => (
                         <li
@@ -808,14 +819,7 @@ export default function EscanerTurnoAlmacen({ onLogout }) {
                             {s.codigo}
                           </span>
                           <span className="ml-auto text-xs text-emerald-700/70 flex items-center gap-2">
-                            <span>
-                              {s.timestamp
-                                ? new Date(s.timestamp).toLocaleTimeString([], {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })
-                                : ""}
-                            </span>
+                            <span>{humanTime(s.timestamp)}</span>
                             <span className="px-2 py-0.5 rounded bg-green-100 text-green-700">
                               OK
                             </span>

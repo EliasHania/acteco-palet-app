@@ -2,10 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
+import { DateTime } from "luxon";
 
-// Utilidad
-const fmtDate = (d = new Date()) => new Date(d).toLocaleDateString("sv-SE"); // YYYY-MM-DD
+// ===== Helpers con Luxon (zona Europe/Madrid)
+const ZONA = "Europe/Madrid";
+const hoyMadrid = () => DateTime.now().setZone(ZONA);
+const fmtDateISO = (dt = hoyMadrid()) => dt.toISODate(); // YYYY-MM-DD
+const toHumanDate = (iso) =>
+  iso ? DateTime.fromISO(iso).setZone(ZONA).toFormat("yyyy-MM-dd") : "";
+const toHumanTime = (iso) =>
+  iso ? DateTime.fromISO(iso).setZone(ZONA).toFormat("HH:mm") : "";
 
+// API helper
 const api = (path, opts = {}) => {
   const token =
     localStorage.getItem("token") || sessionStorage.getItem("token");
@@ -24,8 +32,8 @@ export default function SupervisorMovimientos({ onLogout }) {
   /* =========================
    *       MOVIMIENTOS
    * ========================= */
-  const [movFrom, setMovFrom] = useState(fmtDate());
-  const [movTo, setMovTo] = useState(fmtDate());
+  const [movFrom, setMovFrom] = useState(fmtDateISO());
+  const [movTo, setMovTo] = useState(fmtDateISO());
   const [movimientos, setMovimientos] = useState([]);
   const [loadingMov, setLoadingMov] = useState(false);
   const [opBusyId, setOpBusyId] = useState(null); // deshabilitar acciones por fila
@@ -80,13 +88,8 @@ export default function SupervisorMovimientos({ onLogout }) {
             : String(v ?? "");
       });
       if (row.timestamp) {
-        o["Fecha (humana)"] = new Date(row.timestamp).toLocaleDateString(
-          "sv-SE"
-        );
-        o["Hora (humana)"] = new Date(row.timestamp).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
+        o["Fecha (humana)"] = toHumanDate(row.timestamp);
+        o["Hora (humana)"] = toHumanTime(row.timestamp);
       }
       return o;
     });
@@ -129,8 +132,8 @@ export default function SupervisorMovimientos({ onLogout }) {
   /* =========================
    *        ESCANEOS
    * ========================= */
-  const [from, setFrom] = useState(fmtDate());
-  const [to, setTo] = useState(fmtDate());
+  const [from, setFrom] = useState(fmtDateISO());
+  const [to, setTo] = useState(fmtDateISO());
   const [turno, setTurno] = useState("");
   const [escaneos, setEscaneos] = useState([]);
   const [loadingEscaneos, setLoadingEscaneos] = useState(false);
@@ -186,13 +189,8 @@ export default function SupervisorMovimientos({ onLogout }) {
             : String(v ?? "");
       });
       if (row.timestamp) {
-        o["Fecha (humana)"] = new Date(row.timestamp).toLocaleDateString(
-          "sv-SE"
-        );
-        o["Hora (humana)"] = new Date(row.timestamp).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
+        o["Fecha (humana)"] = toHumanDate(row.timestamp);
+        o["Hora (humana)"] = toHumanTime(row.timestamp);
       }
       return o;
     });

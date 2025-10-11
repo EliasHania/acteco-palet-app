@@ -1,13 +1,22 @@
 // AdminDashboard.jsx completo con pestañas + funciones auxiliares
 import React, { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
+import { DateTime } from "luxon";
+
+const ZONA = "Europe/Madrid";
+const hoyISO = () => DateTime.now().setZone(ZONA).toISODate();
+const humanTime = (iso) =>
+  iso ? DateTime.fromISO(iso).setZone(ZONA).toFormat("HH:mm") : "";
+const humanFullEs = (isoDate) =>
+  DateTime.fromISO(isoDate)
+    .setZone(ZONA)
+    .setLocale("es")
+    .toLocaleString(DateTime.DATE_FULL);
 
 const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
   const [abiertos, setAbiertos] = useState({});
   const [cargando, setCargando] = useState(false);
-  const [fechaSeleccionada, setFechaSeleccionada] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(hoyISO());
   const [trabajadoraFiltradaYoana, setTrabajadoraFiltradaYoana] = useState("");
   const [trabajadoraFiltradaLidia, setTrabajadoraFiltradaLidia] = useState("");
   const [cajas, setCajas] = useState([]);
@@ -46,20 +55,24 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
     setTimeout(() => setCargando(false), 500);
   };
 
-  const normalizarFecha = (fecha) => {
-    const f = new Date(fecha);
-    f.setHours(0, 0, 0, 0);
-    return f.getTime();
-  };
-
+  // ----- Filtro por fecha usando Luxon (día completo en Madrid)
   const filtrarPorFecha = (lista) => {
-    const ref = normalizarFecha(fechaSeleccionada);
-    return lista.filter((p) => normalizarFecha(p.timestamp) === ref);
+    const start = DateTime.fromISO(fechaSeleccionada, { zone: ZONA })
+      .startOf("day")
+      .toMillis();
+    const end = DateTime.fromISO(fechaSeleccionada, { zone: ZONA })
+      .endOf("day")
+      .toMillis();
+
+    return (lista || []).filter((p) => {
+      const ts = DateTime.fromISO(p.timestamp).setZone(ZONA).toMillis();
+      return ts >= start && ts <= end;
+    });
   };
 
   const calcularRecuento = (lista) => {
     const conteo = {};
-    lista.forEach((p) => {
+    (lista || []).forEach((p) => {
       const cantidad = p.cantidad || 1;
       conteo[p.tipo] = (conteo[p.tipo] || 0) + cantidad;
     });
@@ -92,14 +105,18 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
         {listaCajas.length === 0 ? (
           <li className="text-gray-500">Sin cajas registradas.</li>
         ) : (
-          listaCajas
-            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+          [...listaCajas]
+            .sort(
+              (a, b) =>
+                DateTime.fromISO(b.timestamp).toMillis() -
+                DateTime.fromISO(a.timestamp).toMillis()
+            )
             .map((caja, index) => (
               <li key={index} className="flex justify-between border-b pb-1">
                 <span>{caja.tipo}</span>
                 <span>{caja.cantidad} cajas</span>
-                <span>{caja.trabajadora || "—"}</span> {/* 👈 nueva columna */}
-                <span>{new Date(caja.timestamp).toLocaleTimeString()}</span>
+                <span>{caja.trabajadora || "—"}</span>
+                <span>{humanTime(caja.timestamp)}</span>
               </li>
             ))
         )}
@@ -113,7 +130,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
     trabajadoraFiltrada,
     setTrabajadoraFiltrada
   ) => {
-    const agrupado = registros.reduce((acc, p) => {
+    const agrupado = (registros || []).reduce((acc, p) => {
       if (!acc[p.trabajadora]) acc[p.trabajadora] = [];
       acc[p.trabajadora].push(p);
       return acc;
@@ -121,10 +138,10 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
 
     const nombresTrabajadoras = Object.keys(agrupado).sort((a, b) => {
       const ultimaA = Math.max(
-        ...agrupado[a].map((p) => new Date(p.timestamp).getTime())
+        ...agrupado[a].map((p) => DateTime.fromISO(p.timestamp).toMillis())
       );
       const ultimaB = Math.max(
-        ...agrupado[b].map((p) => new Date(p.timestamp).getTime())
+        ...agrupado[b].map((p) => DateTime.fromISO(p.timestamp).toMillis())
       );
       return ultimaB - ultimaA;
     });
@@ -138,12 +155,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
           Turno de {turno}
         </p>
         <p className="mb-4 text-green-500 text-sm">
-          {new Date(fechaSeleccionada).toLocaleDateString("es-ES", {
-            weekday: "long",
-            day: "2-digit",
-            month: "long",
-            year: "numeric",
-          })}
+          {humanFullEs(fechaSeleccionada)}
         </p>
 
         <div className="mb-4">
@@ -183,9 +195,11 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
                 </div>
                 {abiertos[nombre] && (
                   <ul className="mt-3 space-y-2 text-sm text-green-700">
-                    {agrupado[nombre]
+                    {[...agrupado[nombre]]
                       .sort(
-                        (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+                        (a, b) =>
+                          DateTime.fromISO(b.timestamp).toMillis() -
+                          DateTime.fromISO(a.timestamp).toMillis()
                       )
                       .map((p) => (
                         <li
@@ -204,7 +218,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
                             Tipo: {p.tipo}
                           </div>
                           <div className="text-green-500 text-xs italic">
-                            {new Date(p.timestamp).toLocaleTimeString()}
+                            {humanTime(p.timestamp)}
                           </div>
                         </li>
                       ))}
@@ -234,7 +248,10 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
 
   const exportarExcelAvanzado = () => {
     const workbook = XLSX.utils.book_new();
-    const fechaHoy = new Date().toLocaleDateString("es-ES");
+    const fechaHoy = DateTime.now()
+      .setZone(ZONA)
+      .setLocale("es")
+      .toLocaleString(DateTime.DATE_FULL);
 
     const perchasPorCaja = {
       "40x28": 65,
@@ -260,12 +277,12 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
       const resumenTipos = {};
       let totalPerchas = 0;
 
-      listaPalets.forEach((p) => {
+      (listaPalets || []).forEach((p) => {
         sheetData.push([
           p.trabajadora,
           p.codigo || "No disponible",
           p.tipo,
-          new Date(p.timestamp).toLocaleTimeString(),
+          humanTime(p.timestamp),
         ]);
         resumenTipos[p.tipo] = (resumenTipos[p.tipo] || 0) + 1;
       });
@@ -283,7 +300,10 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
         ]);
       });
 
-      sheetData.push([], ["Total palets registrados:", listaPalets.length]);
+      sheetData.push(
+        [],
+        ["Total palets registrados:", (listaPalets || []).length]
+      );
       sheetData.push(["Total de perchas estimadas:", totalPerchas]);
 
       const ws = XLSX.utils.aoa_to_sheet(sheetData);
@@ -298,7 +318,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
         [],
         [
           "Turno",
-          "Trabajadora", // 👈 NUEVO
+          "Trabajadora",
           "Tipo de caja",
           "Cantidad",
           "Perchas por caja",
@@ -310,9 +330,10 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
       const resumenTipos = {};
       let totalPerchas = 0;
 
-      // (opcional) orden cronológico
       const ordenadas = [...cajasFiltradas].sort(
-        (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+        (a, b) =>
+          DateTime.fromISO(a.timestamp).toMillis() -
+          DateTime.fromISO(b.timestamp).toMillis()
       );
 
       ordenadas.forEach((caja) => {
@@ -331,12 +352,12 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
 
         sheetData.push([
           turno,
-          caja.trabajadora || "No asignada", // 👈 NUEVO
+          caja.trabajadora || "No asignada",
           tipo,
           cantidad,
           perchasPorUnidad,
           totalTipo,
-          new Date(caja.timestamp).toLocaleTimeString(),
+          humanTime(caja.timestamp),
         ]);
 
         resumenTipos[tipo] = (resumenTipos[tipo] || 0) + cantidad;
@@ -382,6 +403,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
 
     XLSX.writeFile(workbook, `admin-palets-${fechaSeleccionada}.xlsx`);
   };
+
   const renderContenidoTurno = (
     nombre,
     palets,
@@ -412,6 +434,7 @@ const AdminDashboard = ({ onLogout, palets, refrescarPalets, nuevosIds }) => {
       {renderCajasPorTurno(`Detalles de cajas turno ${nombre}`, cajas)}
     </div>
   );
+
   return (
     <div className="min-h-screen bg-gray-100 text-gray-800 p-6">
       <header className="text-center text-3xl font-bold text-indigo-700 mb-6">

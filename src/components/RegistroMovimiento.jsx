@@ -1,13 +1,21 @@
 import { useMemo, useState } from "react";
 import { authFetch } from "../authFetch";
+import { DateTime } from "luxon";
 
-const hoyISO = () => new Date().toISOString().slice(0, 10);
-const ahoraHM = () => {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2, "0")}:${String(
-    d.getMinutes()
-  ).padStart(2, "0")}`;
-};
+// ===== Helpers con zona fija Europe/Madrid
+const nowMadrid = () => DateTime.now().setZone("Europe/Madrid");
+
+// YYYY-MM-DD en Madrid (para <input type="date">)
+const hoyISO = () => nowMadrid().toISODate();
+
+// HH:mm en Madrid (para <input type="time">)
+const ahoraHM = () => nowMadrid().toFormat("HH:mm");
+
+// Construir ISO UTC desde (fecha "YYYY-MM-DD", hora "HH:mm") interpretadas en Madrid
+const isoUTCFromLocal = (fecha, hora) =>
+  DateTime.fromISO(`${fecha}T${hora}`, { zone: "Europe/Madrid" })
+    .toUTC()
+    .toISO();
 
 export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
   // modo: "descarga" | "carga" | "carga-mixta"
@@ -192,9 +200,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
 
       if (modo === "descarga") {
         // backend espera "timestamp" para llegada de descarga
-        const llegadaISO = new Date(
-          `${fechaDesc}T${horaDesc}:00`
-        ).toISOString();
+        const llegadaISO = isoUTCFromLocal(fechaDesc, horaDesc);
         payload = {
           tipo: "descarga",
           numeroContenedor: contenedor.trim(),
@@ -204,12 +210,12 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
           personal: responsablesDesc.trim(),
           timestamp: llegadaISO,
           registradaPor: "almacen",
-          fecha: fechaDesc,
+          fecha: DateTime.fromISO(fechaDesc, {
+            zone: "Europe/Madrid",
+          }).toISODate(),
         };
       } else if (modo === "carga") {
-        const llegadaISO = new Date(
-          `${fechaCarga}T${horaLlegada}:00`
-        ).toISOString();
+        const llegadaISO = isoUTCFromLocal(fechaCarga, horaLlegada);
         payload = {
           tipo: "carga",
           empresaTransportista: empresa.trim(),
@@ -219,7 +225,9 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
           timestampLlegada: llegadaISO,
           personal: responsablesCarga.trim(),
           registradaPor: "almacen",
-          fecha: fechaCarga,
+          fecha: DateTime.fromISO(fechaCarga, {
+            zone: "Europe/Madrid",
+          }).toISODate(),
           numeroContenedor: contenedorCarga.trim() || undefined, // opcional
           tractora: tractoraCarga.trim() || undefined, // opcional
           remolque: remolqueCarga.trim(), // requerido
@@ -229,9 +237,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
         };
       } else {
         // carga-mixta
-        const llegadaISO = new Date(
-          `${fechaCarga}T${horaLlegada}:00`
-        ).toISOString();
+        const llegadaISO = isoUTCFromLocal(fechaCarga, horaLlegada);
         payload = {
           tipo: "carga-mixta",
           empresaTransportista: empresa.trim(),
@@ -244,7 +250,9 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
           timestampLlegada: llegadaISO,
           personal: responsablesCarga.trim(),
           registradaPor: "almacen",
-          fecha: fechaCarga,
+          fecha: DateTime.fromISO(fechaCarga, {
+            zone: "Europe/Madrid",
+          }).toISODate(),
           numeroContenedor: contenedorMixta.trim() || undefined, // opcional
           tractora: tractoraMixta.trim() || undefined, // opcional
           remolque: remolqueMixta.trim(), // requerido
@@ -307,27 +315,21 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
         patch = {
           palets: parseInt(paletsDentro, 10),
           numeroCajas: parseInt(cajasDentro, 10),
-          timestampSalida: new Date(
-            `${fechaDesc}T${horaSalidaDesc}:00`
-          ).toISOString(),
+          timestampSalida: isoUTCFromLocal(fechaDesc, horaSalidaDesc),
         };
         url = `${
           import.meta.env.VITE_BACKEND_URL
         }/api/almacen/movimientos/${recordId}/descarga-final`;
       } else if (modo === "carga") {
         patch = {
-          timestampSalida: new Date(
-            `${fechaCarga}T${horaSalida}:00`
-          ).toISOString(),
+          timestampSalida: isoUTCFromLocal(fechaCarga, horaSalida),
         };
         url = `${
           import.meta.env.VITE_BACKEND_URL
         }/api/almacen/movimientos/${recordId}/cerrar-carga`;
       } else {
         patch = {
-          timestampSalida: new Date(
-            `${fechaCarga}T${horaSalidaMixta}:00`
-          ).toISOString(),
+          timestampSalida: isoUTCFromLocal(fechaCarga, horaSalidaMixta),
         };
         url = `${
           import.meta.env.VITE_BACKEND_URL
