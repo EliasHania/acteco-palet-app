@@ -17,6 +17,17 @@ const isoUTCFromLocal = (fecha, hora) =>
     .toUTC()
     .toISO();
 
+// ===== Lista fija de tipos de palet
+const TIPOS_PALET = [
+  "46x28",
+  "40x28",
+  "46x11",
+  "40x11",
+  "38x11",
+  "32x11",
+  "26x11",
+];
+
 export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
   // modo: "descarga" | "carga" | "carga-mixta"
   const [modo, setModo] = useState("descarga");
@@ -550,7 +561,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
                 label="Tipo de palets"
                 value={tipoPalet}
                 onChange={setTipoPalet}
-                options={tiposPalet}
+                options={TIPOS_PALET}
                 placeholder="Selecciona tipo"
               />
               <NumberField
@@ -702,7 +713,7 @@ export default function RegistroMovimiento({ tiposPalet = [], onSaved }) {
                         <SelectField
                           value={l.tipo}
                           onChange={(v) => setLineaMixta(idx, { tipo: v })}
-                          options={tiposPalet}
+                          options={TIPOS_PALET}
                           placeholder="Selecciona tipo"
                         />
                       </div>
