@@ -8,9 +8,18 @@ import { DateTime } from "luxon";
 const ZONA = "Europe/Madrid";
 const dt = (iso) => (iso ? DateTime.fromISO(iso).setZone(ZONA) : null);
 const hoyMadrid = () => DateTime.now().setZone(ZONA);
-const fmtDateISO = (dt = hoyMadrid()) => dt.toISODate(); // YYYY-MM-DD
+const fmtDateISO = (dtv = hoyMadrid()) => dtv.toISODate(); // YYYY-MM-DD
 const toHumanDate = (iso) => (dt(iso) ? dt(iso).toFormat("yyyy-MM-dd") : "");
 const toHumanTime = (iso) => (dt(iso) ? dt(iso).toFormat("HH:mm") : "");
+
+// Normalizador robusto para el campo "tipo"
+const normalizeTipo = (s) =>
+  (s ?? "")
+    .toString()
+    .trim()
+    .replace(/([a-z])([A-Z])/g, "$1-$2") // corta camelCase a kebab
+    .toLowerCase()
+    .replace(/[_\s]+/g, "-"); // espacios/guiones bajos -> guion
 
 // API helper
 const api = (path, opts = {}) => {
@@ -63,14 +72,17 @@ export default function SupervisorMovimientos({ onLogout }) {
   // Para CARGA / MIXTA usaremos "timestampLlegada".
   const movimientosFiltrados = useMemo(() => {
     const base = Array.isArray(movimientos) ? movimientos : [];
-    return tipoFiltro ? base.filter((m) => m?.tipo === tipoFiltro) : base;
+    if (!tipoFiltro) return base;
+    return base.filter((m) => normalizeTipo(m?.tipo) === tipoFiltro);
   }, [movimientos, tipoFiltro]);
 
   // Mapeo a objeto plano de visualización
   const filasVista = useMemo(() => {
     return movimientosFiltrados.map((m) => {
       const llegadaISO =
-        m?.tipo === "descarga" ? m?.timestamp : m?.timestampLlegada;
+        normalizeTipo(m?.tipo) === "descarga"
+          ? m?.timestamp
+          : m?.timestampLlegada;
 
       return {
         // Orden recomendado para la tabla
@@ -125,8 +137,8 @@ export default function SupervisorMovimientos({ onLogout }) {
 
     const makeSheet = (lista, nombreHoja) => {
       const rows = lista.map((m) => {
-        const llegadaISO =
-          m?.tipo === "descarga" ? m?.timestamp : m?.timestampLlegada;
+        const isDescarga = normalizeTipo(m?.tipo) === "descarga";
+        const llegadaISO = isDescarga ? m?.timestamp : m?.timestampLlegada;
         const base = {
           fecha: m?.fecha || toHumanDate(llegadaISO),
           "hora (humana)": toHumanTime(llegadaISO),
@@ -164,9 +176,13 @@ export default function SupervisorMovimientos({ onLogout }) {
 
     const wb = XLSX.utils.book_new();
 
-    const dsc = movimientos.filter((m) => m?.tipo === "descarga");
-    const crg = movimientos.filter((m) => m?.tipo === "carga");
-    const mix = movimientos.filter((m) => m?.tipo === "carga-mixta");
+    const dsc = movimientos.filter(
+      (m) => normalizeTipo(m?.tipo) === "descarga"
+    );
+    const crg = movimientos.filter((m) => normalizeTipo(m?.tipo) === "carga");
+    const mix = movimientos.filter(
+      (m) => normalizeTipo(m?.tipo) === "carga-mixta"
+    );
 
     if (exportKind === "todo") {
       const hojas = [
