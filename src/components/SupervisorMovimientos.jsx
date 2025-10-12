@@ -256,24 +256,35 @@ export default function SupervisorMovimientos({ onLogout }) {
     }
   };
 
-  const columnasEscaneos = useMemo(() => {
-    const set = new Set();
-    escaneos.forEach((row) =>
-      Object.keys(row || {}).forEach((k) => k !== "__v" && set.add(k))
-    );
-    const prefer = [
+  // === VISTA ESCANEOS: SOLO columnas pedidas, con fecha humana si falta
+  const columnasEscaneos = useMemo(
+    () => [
       "fecha",
-      "timestamp",
       "codigo",
       "turno",
       "responsableEscaneo",
       "origen",
-      "_id",
-      "createdAt",
-    ];
-    const tail = [...set].filter((k) => !prefer.includes(k));
-    return [...prefer.filter((k) => set.has(k)), ...tail];
-  }, [escaneos]);
+      "trabajadora",
+      "tipo",
+      "registradaPor",
+    ],
+    []
+  );
+
+  const escaneosVista = useMemo(
+    () =>
+      (Array.isArray(escaneos) ? escaneos : []).map((row) => ({
+        fecha: row.fecha || toHumanDate(row.timestamp),
+        codigo: row.codigo || "",
+        turno: row.turno || "",
+        responsableEscaneo: row.responsableEscaneo || "",
+        origen: row.origen || "",
+        trabajadora: row.trabajadora || "",
+        tipo: row.tipo || "",
+        registradaPor: row.registradaPor || "",
+      })),
+    [escaneos]
+  );
 
   // ===== Excel de escaneos con estructura de Almacén (Resumen + Detalle)
   const exportEscaneosExcel = () => {
@@ -409,7 +420,6 @@ export default function SupervisorMovimientos({ onLogout }) {
     ];
     XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle");
 
-    // Guardar
     const fechaArchivo = ahora.toISODate(); // YYYY-MM-DD
     XLSX.writeFile(wb, `escaneos_${fechaArchivo}_${turno || "todos"}.xlsx`);
   };
@@ -625,7 +635,7 @@ export default function SupervisorMovimientos({ onLogout }) {
               Exportar Excel
             </button>
             <div className="ml-auto text-sm text-emerald-800">
-              Total: <b>{escaneos.length}</b>
+              Total: <b>{escaneosVista.length}</b>
             </div>
           </div>
 
@@ -641,21 +651,19 @@ export default function SupervisorMovimientos({ onLogout }) {
                 </tr>
               </thead>
               <tbody>
-                {escaneos.map((row) => (
+                {escaneosVista.map((row, idx) => (
                   <tr
-                    key={row._id}
+                    key={escaneos[idx]?._id || idx}
                     className="odd:bg-white even:bg-emerald-50/40"
                   >
                     {columnasEscaneos.map((c) => (
                       <td key={c} className="px-2 py-1 border-b align-top">
-                        {typeof row[c] === "object" && row[c] !== null
-                          ? JSON.stringify(row[c])
-                          : String(row[c] ?? "")}
+                        {String(row[c] ?? "")}
                       </td>
                     ))}
                   </tr>
                 ))}
-                {!escaneos.length && (
+                {!escaneosVista.length && (
                   <tr>
                     <td
                       className="px-2 py-3 text-center text-emerald-700"
