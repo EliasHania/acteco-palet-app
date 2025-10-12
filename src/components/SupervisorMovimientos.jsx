@@ -21,6 +21,18 @@ const normalizeTipo = (s) =>
     .toLowerCase()
     .replace(/[_\s]+/g, "-");
 
+// === Helpers para Excel de Escaneos (misma estructura que Almacén)
+const perchasPorCaja = {
+  "46x28": 45,
+  "40x28": 65,
+  "46x11": 125,
+  "40x11": 175,
+  "38x11": 175,
+  "32x11": 225,
+  "26x11": 325,
+};
+const cap = (s = "") => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
+
 // API helper
 const api = (path, opts = {}) => {
   const token =
@@ -101,8 +113,8 @@ export default function SupervisorMovimientos({ onLogout }) {
         remolque: m?.remolque || "",
         tractora: m?.tractora || "",
         tipoPalet: m?.tipoPalet || "",
-        numeroPalets: getNumeroPalets(m), // 👈 ahora lee también descargas y mixtas
-        numeroCajas: typeof m?.numeroCajas === "number" ? m.numeroCajas : "", // 👈 descargas (paso 2)
+        numeroPalets: getNumeroPalets(m),
+        numeroCajas: typeof m?.numeroCajas === "number" ? m.numeroCajas : "",
       };
     });
   }, [movimientosFiltrados]);
@@ -122,7 +134,7 @@ export default function SupervisorMovimientos({ onLogout }) {
       "tractora",
       "tipoPalet",
       "numeroPalets",
-      "numeroCajas", // aparecerá sólo si existe en alguna fila
+      "numeroCajas",
     ];
     const present = new Set();
     filasVista.forEach((r) =>
@@ -133,7 +145,7 @@ export default function SupervisorMovimientos({ onLogout }) {
     return order.filter((k) => present.has(k));
   }, [filasVista]);
 
-  // ====== Excel de movimientos (con nº palets y nº cajas en descargas)
+  // ====== Excel de movimientos
   const exportMovimientosExcel = () => {
     if (!movimientos.length) return;
 
@@ -154,10 +166,9 @@ export default function SupervisorMovimientos({ onLogout }) {
           remolque: m?.remolque || "",
           tractora: m?.tractora || "",
           tipoPalet: m?.tipoPalet || "",
-          numeroPalets: getNumeroPalets(m), // 👈 unified
-          numeroCajas: typeof m?.numeroCajas === "number" ? m.numeroCajas : "", // 👈 descargas
+          numeroPalets: getNumeroPalets(m),
+          numeroCajas: typeof m?.numeroCajas === "number" ? m.numeroCajas : "",
         };
-        // limpia claves vacías
         Object.keys(base).forEach(
           (k) => (base[k] === "" || base[k] === undefined) && delete base[k]
         );
@@ -264,35 +275,143 @@ export default function SupervisorMovimientos({ onLogout }) {
     return [...prefer.filter((k) => set.has(k)), ...tail];
   }, [escaneos]);
 
+  // ===== Excel de escaneos con estructura de Almacén (Resumen + Detalle)
   const exportEscaneosExcel = () => {
     if (!escaneos.length) return;
-    const rows = escaneos.map((row) => {
-      const o = {};
-      columnasEscaneos.forEach((k) => {
-        const v = row[k];
-        o[k] =
-          typeof v === "object" && v !== null
-            ? JSON.stringify(v)
-            : String(v ?? "");
-      });
-      if (row.timestamp) {
-        o["Fecha (humana)"] = toHumanDate(row.timestamp);
-        o["Hora"] = toHumanTime(row.timestamp);
-      }
-      return o;
+
+    const ahora = DateTime.now().setZone(ZONA).setLocale("es");
+    const fechaTexto = ahora.toFormat("cccc dd 'de' LLLL 'de' yyyy");
+    const titulo = `Resumen del turno de ${cap(
+      turno || "todos"
+    )} – ${fechaTexto}`;
+
+    const responsable =
+      escaneos.find((e) => e?.responsableEscaneo)?.responsableEscaneo || "";
+    const subtitulo = responsable
+      ? `Responsable del escaneo: ${responsable}`
+      : "";
+
+    // Resúmenes
+    const resumenPorTrabajadora = {};
+    const resumenPorTipo = {
+      "46x28": 0,
+      "40x28": 0,
+      "46x11": 0,
+      "40x11": 0,
+      "38x11": 0,
+      "32x11": 0,
+      "26x11": 0,
+    };
+
+    escaneos.forEach((r) => {
+      const trabajadora = r.trabajadora || "—";
+      const tipo = r.tipo || "—";
+
+      if (!resumenPorTrabajadora[trabajadora])
+        resumenPorTrabajadora[trabajadora] = {};
+      resumenPorTrabajadora[trabajadora][tipo] =
+        (resumenPorTrabajadora[trabajadora][tipo] || 0) + 1;
+
+      if (Object.prototype.hasOwnProperty.call(resumenPorTipo, tipo))
+        resumenPorTipo[tipo]++;
     });
+
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const headers = Object.keys(rows[0] || {});
-    ws["!cols"] = headers.map((h) => {
-      const maxLen = Math.max(
-        h.length,
-        ...rows.map((r) => (r[h] ? String(r[h]).length : 0))
-      );
-      return { wch: Math.min(Math.max(maxLen + 2, 12), 60) };
+
+    // Hoja 1: Resumen
+    const sheetResumen = [[titulo]];
+    if (subtitulo) sheetResumen.push([subtitulo]);
+    sheetResumen.push([]);
+    sheetResumen.push(["Resumen por trabajadora:"]);
+
+    Object.entries(resumenPorTrabajadora).forEach(([nombre, tipos]) => {
+      const detalles = Object.entries(tipos)
+        .map(
+          ([tipo, cantidad]) =>
+            `${cantidad} palet${cantidad > 1 ? "s" : ""} de ${tipo}`
+        )
+        .join(", ");
+      sheetResumen.push([`${nombre}:`, detalles]);
     });
-    XLSX.utils.book_append_sheet(wb, ws, "Escaneos");
-    XLSX.writeFile(wb, `escaneos_almacen_${from}_a_${to}.xlsx`);
+
+    sheetResumen.push([]);
+    sheetResumen.push(["Resumen por tipo de palet (y perchas estimadas):"]);
+
+    let totalPerchas = 0;
+    Object.entries(resumenPorTipo).forEach(([tipo, cantidad]) => {
+      const perchas = cantidad * 20 * (perchasPorCaja[tipo] || 0);
+      totalPerchas += perchas;
+      sheetResumen.push([
+        `Total palets de ${tipo}:`,
+        cantidad,
+        `Total perchas de ${tipo}:`,
+        perchas,
+      ]);
+    });
+
+    sheetResumen.push([]);
+    sheetResumen.push(["Total palets registrados:", escaneos.length]);
+    sheetResumen.push(["Total perchas estimadas:", totalPerchas]);
+
+    const wsResumen = XLSX.utils.aoa_to_sheet(sheetResumen);
+    wsResumen["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }];
+    wsResumen["!cols"] = [{ wch: 36 }, { wch: 24 }, { wch: 36 }, { wch: 24 }];
+    XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
+
+    // Hoja 2: Detalle
+    const detalleHeaders = [
+      "Fecha",
+      "Hora",
+      "Código",
+      "Trabajadora",
+      "Tipo",
+      "Turno",
+      "Responsable",
+    ];
+
+    const detalleRows = escaneos
+      .slice()
+      .sort((a, b) => {
+        const da = DateTime.fromISO(a.timestamp || a.createdAt || 0)
+          .setZone(ZONA)
+          .toMillis();
+        const db = DateTime.fromISO(b.timestamp || b.createdAt || 0)
+          .setZone(ZONA)
+          .toMillis();
+        return da - db;
+      })
+      .map((r) => {
+        const d = r.timestamp
+          ? DateTime.fromISO(r.timestamp).setZone(ZONA)
+          : null;
+        const fecha = d ? d.toISODate() : ahora.toISODate();
+        const hora = d ? d.toFormat("HH:mm") : "";
+        return [
+          fecha,
+          hora,
+          r.codigo || "",
+          r.trabajadora || "—",
+          r.tipo || "—",
+          r.turno || "",
+          r.responsableEscaneo || "",
+        ];
+      });
+
+    const wsDetalle = XLSX.utils.aoa_to_sheet([detalleHeaders, ...detalleRows]);
+    wsDetalle["!cols"] = [
+      { wch: 12 }, // Fecha
+      { wch: 8 }, // Hora
+      { wch: 14 }, // Código
+      { wch: 18 }, // Trabajadora
+      { wch: 10 }, // Tipo
+      { wch: 14 }, // Turno
+      { wch: 18 }, // Responsable
+    ];
+    XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle");
+
+    // Guardar
+    const fechaArchivo = ahora.toISODate(); // YYYY-MM-DD
+    XLSX.writeFile(wb, `escaneos_${fechaArchivo}_${turno || "todos"}.xlsx`);
   };
 
   useEffect(() => {
