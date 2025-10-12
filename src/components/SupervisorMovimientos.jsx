@@ -17,7 +17,7 @@ const normalizeTipo = (s) =>
   (s ?? "")
     .toString()
     .trim()
-    .replace(/([a-z])([A-Z])/g, "$1-$2") // corta camelCase a kebab
+    .replace(/([a-z])([A-Z])/g, "$1-$2") // camelCase -> kebab
     .toLowerCase()
     .replace(/[_\s]+/g, "-"); // espacios/guiones bajos -> guion
 
@@ -44,7 +44,6 @@ export default function SupervisorMovimientos({ onLogout }) {
   const [movTo, setMovTo] = useState(fmtDateISO());
   const [movimientos, setMovimientos] = useState([]);
   const [loadingMov, setLoadingMov] = useState(false);
-  const [opBusyId, setOpBusyId] = useState(null); // deshabilitar acciones por fila
 
   // Filtro por tipo para la vista
   const [tipoFiltro, setTipoFiltro] = useState(""); // "" | "descarga" | "carga" | "carga-mixta"
@@ -67,16 +66,14 @@ export default function SupervisorMovimientos({ onLogout }) {
     }
   };
 
-  // ===== Vista: solo columnas útiles y legibles
-  // Para DESCARGA usaremos "timestamp" como hora de llegada.
-  // Para CARGA / MIXTA usaremos "timestampLlegada".
+  // Para DESCARGA usamos "timestamp". Para CARGA/MIXTA usamos "timestampLlegada".
   const movimientosFiltrados = useMemo(() => {
     const base = Array.isArray(movimientos) ? movimientos : [];
     if (!tipoFiltro) return base;
     return base.filter((m) => normalizeTipo(m?.tipo) === tipoFiltro);
   }, [movimientos, tipoFiltro]);
 
-  // Mapeo a objeto plano de visualización
+  // Vista plana
   const filasVista = useMemo(() => {
     return movimientosFiltrados.map((m) => {
       const llegadaISO =
@@ -85,9 +82,8 @@ export default function SupervisorMovimientos({ onLogout }) {
           : m?.timestampLlegada;
 
       return {
-        // Orden recomendado para la tabla
         fecha: m?.fecha || toHumanDate(llegadaISO),
-        "hora (humana)": toHumanTime(llegadaISO),
+        Hora: toHumanTime(llegadaISO),
         tipo: m?.tipo || "",
         personal: m?.personal || "",
         empresaTransportista: m?.empresaTransportista || "",
@@ -99,16 +95,14 @@ export default function SupervisorMovimientos({ onLogout }) {
         tractora: m?.tractora || "",
         tipoPalet: m?.tipoPalet || "",
         numeroPalets: typeof m?.numeroPalets === "number" ? m.numeroPalets : "",
-        // ocultamos: _id, createdAt, timestamp, registradaPor, items, updatedAt, timestampSalida...
       };
     });
   }, [movimientosFiltrados]);
 
   const columnasMov = useMemo(() => {
-    // orden fijo de columnas visibles
     const order = [
       "fecha",
-      "hora (humana)",
+      "Hora",
       "tipo",
       "personal",
       "empresaTransportista",
@@ -121,7 +115,6 @@ export default function SupervisorMovimientos({ onLogout }) {
       "tipoPalet",
       "numeroPalets",
     ];
-    // solo las que existan en alguna fila y con valores
     const present = new Set();
     filasVista.forEach((r) =>
       order.forEach((k) => {
@@ -141,7 +134,7 @@ export default function SupervisorMovimientos({ onLogout }) {
         const llegadaISO = isDescarga ? m?.timestamp : m?.timestampLlegada;
         const base = {
           fecha: m?.fecha || toHumanDate(llegadaISO),
-          "hora (humana)": toHumanTime(llegadaISO),
+          Hora: toHumanTime(llegadaISO),
           tipo: m?.tipo || "",
           personal: m?.personal || "",
           empresaTransportista: m?.empresaTransportista || "",
@@ -155,7 +148,6 @@ export default function SupervisorMovimientos({ onLogout }) {
           numeroPalets:
             typeof m?.numeroPalets === "number" ? m.numeroPalets : "",
         };
-        // limpiar claves vacías para no ensanchar columnas innecesarias
         Object.keys(base).forEach(
           (k) => (base[k] === "" || base[k] === undefined) && delete base[k]
         );
@@ -175,7 +167,6 @@ export default function SupervisorMovimientos({ onLogout }) {
     };
 
     const wb = XLSX.utils.book_new();
-
     const dsc = movimientos.filter(
       (m) => normalizeTipo(m?.tipo) === "descarga"
     );
@@ -185,44 +176,30 @@ export default function SupervisorMovimientos({ onLogout }) {
     );
 
     if (exportKind === "todo") {
-      const hojas = [
+      [
         makeSheet(dsc, "Descargas"),
         makeSheet(crg, "Cargas"),
         makeSheet(mix, "CargasMixtas"),
-      ];
-      hojas.forEach(({ ws, nombreHoja }) =>
+      ].forEach(({ ws, nombreHoja }) =>
         XLSX.utils.book_append_sheet(wb, ws, nombreHoja)
       );
     } else if (exportKind === "descarga") {
-      const { ws } = makeSheet(dsc, "Descargas");
-      XLSX.utils.book_append_sheet(wb, ws, "Descargas");
+      XLSX.utils.book_append_sheet(
+        wb,
+        makeSheet(dsc, "Descargas").ws,
+        "Descargas"
+      );
     } else if (exportKind === "carga") {
-      const { ws } = makeSheet(crg, "Cargas");
-      XLSX.utils.book_append_sheet(wb, ws, "Cargas");
+      XLSX.utils.book_append_sheet(wb, makeSheet(crg, "Cargas").ws, "Cargas");
     } else if (exportKind === "carga-mixta") {
-      const { ws } = makeSheet(mix, "CargasMixtas");
-      XLSX.utils.book_append_sheet(wb, ws, "CargasMixtas");
+      XLSX.utils.book_append_sheet(
+        wb,
+        makeSheet(mix, "CargasMixtas").ws,
+        "CargasMixtas"
+      );
     }
 
     XLSX.writeFile(wb, `movimientos_${movFrom}_a_${movTo}.xlsx`);
-  };
-
-  const patchFila = async (id, tipo) => {
-    try {
-      setOpBusyId(id);
-      const url =
-        tipo === "descarga"
-          ? `/api/almacen/movimientos/${id}/descarga-final`
-          : `/api/almacen/movimientos/${id}/cerrar-carga`;
-      const res = await api(url, { method: "PATCH", body: JSON.stringify({}) });
-      if (!res.ok) throw new Error("No se pudo actualizar el movimiento");
-      await cargarMovimientos();
-    } catch (e) {
-      console.error(e);
-      alert("No se pudo actualizar el movimiento.");
-    } finally {
-      setOpBusyId(null);
-    }
   };
 
   useEffect(() => {
@@ -290,7 +267,7 @@ export default function SupervisorMovimientos({ onLogout }) {
       });
       if (row.timestamp) {
         o["Fecha (humana)"] = toHumanDate(row.timestamp);
-        o["Hora (humana)"] = toHumanTime(row.timestamp);
+        o["Hora"] = toHumanTime(row.timestamp);
       }
       return o;
     });
@@ -435,50 +412,26 @@ export default function SupervisorMovimientos({ onLogout }) {
                       {c}
                     </th>
                   ))}
-                  <th className="px-2 py-2 text-left border-b">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {filasVista.map((row, idx) => {
-                  const original = movimientosFiltrados[idx]; // para acciones
-                  return (
-                    <tr
-                      key={original?._id || idx}
-                      className="odd:bg-white even:bg-emerald-50/40"
-                    >
-                      {columnasMov.map((c) => (
-                        <td key={c} className="px-2 py-1 border-b align-top">
-                          {String(row[c] ?? "")}
-                        </td>
-                      ))}
-                      <td className="px-2 py-1 border-b">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => patchFila(original?._id, "descarga")}
-                            disabled={opBusyId === original?._id}
-                            className="px-2 py-1 rounded bg-amber-600 text-white text-xs disabled:opacity-50"
-                            title="Marcar descarga final"
-                          >
-                            Descarga final
-                          </button>
-                          <button
-                            onClick={() => patchFila(original?._id, "cerrar")}
-                            disabled={opBusyId === original?._id}
-                            className="px-2 py-1 rounded bg-sky-700 text-white text-xs disabled:opacity-50"
-                            title="Cerrar carga"
-                          >
-                            Cerrar carga
-                          </button>
-                        </div>
+                {filasVista.map((row, idx) => (
+                  <tr
+                    key={movimientosFiltrados[idx]?._id || idx}
+                    className="odd:bg-white even:bg-emerald-50/40"
+                  >
+                    {columnasMov.map((c) => (
+                      <td key={c} className="px-2 py-1 border-b align-top">
+                        {String(row[c] ?? "")}
                       </td>
-                    </tr>
-                  );
-                })}
+                    ))}
+                  </tr>
+                ))}
                 {!filasVista.length && (
                   <tr>
                     <td
                       className="px-2 py-3 text-center text-emerald-700"
-                      colSpan={columnasMov.length + 1}
+                      colSpan={columnasMov.length}
                     >
                       Sin resultados.
                     </td>
