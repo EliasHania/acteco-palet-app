@@ -4,20 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { DateTime } from "luxon";
 
-/* =========================
- *  Luxon helpers (Madrid)
- * ========================= */
+// ===== Helpers con Luxon (zona Europe/Madrid)
 const ZONA = "Europe/Madrid";
+const dt = (iso) => (iso ? DateTime.fromISO(iso).setZone(ZONA) : null);
 const hoyMadrid = () => DateTime.now().setZone(ZONA);
 const fmtDateISO = (dt = hoyMadrid()) => dt.toISODate(); // YYYY-MM-DD
-const toHumanDate = (iso) =>
-  iso ? DateTime.fromISO(iso).setZone(ZONA).toFormat("yyyy-MM-dd") : "";
-const toHumanTime = (iso) =>
-  iso ? DateTime.fromISO(iso).setZone(ZONA).toFormat("HH:mm") : "";
+const toHumanDate = (iso) => (dt(iso) ? dt(iso).toFormat("yyyy-MM-dd") : "");
+const toHumanTime = (iso) => (dt(iso) ? dt(iso).toFormat("HH:mm") : "");
 
-/* =========================
- *  API helper
- * ========================= */
+// API helper
 const api = (path, opts = {}) => {
   const token =
     localStorage.getItem("token") || sessionStorage.getItem("token");
@@ -30,157 +25,22 @@ const api = (path, opts = {}) => {
   });
 };
 
-/* =========================
- *  Excel builder (igual que Almacén)
- * ========================= */
-const PERCHAS_POR_CAJA = {
-  "46x28": 45,
-  "40x28": 65,
-  "46x11": 125,
-  "40x11": 175,
-  "38x11": 175,
-  "32x11": 225,
-  "26x11": 325,
-};
-const cap = (s = "") => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
-
-function buildWorkbookEscaneos({
-  registros = [],
-  turno = "",
-  responsable = "",
-}) {
-  const wb = XLSX.utils.book_new();
-
-  // ---- Resúmenes
-  const resumenPorTrabajadora = {};
-  const resumenPorTipo = {
-    "46x28": 0,
-    "40x28": 0,
-    "46x11": 0,
-    "40x11": 0,
-    "38x11": 0,
-    "32x11": 0,
-    "26x11": 0,
-  };
-
-  registros.forEach((r) => {
-    const trabajadora = r.trabajadora || "—";
-    const tipo = r.tipo || "—";
-    if (!resumenPorTrabajadora[trabajadora])
-      resumenPorTrabajadora[trabajadora] = {};
-    resumenPorTrabajadora[trabajadora][tipo] =
-      (resumenPorTrabajadora[trabajadora][tipo] || 0) + 1;
-
-    if (resumenPorTipo.hasOwnProperty(tipo)) resumenPorTipo[tipo]++;
-  });
-
-  // ---- Hoja 1: Resumen
-  const hoyTexto = DateTime.now().setZone(ZONA).toLocaleString({
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
-
-  const titulo = `Resumen del turno de ${cap(turno)} – ${hoyTexto}`;
-  const subtitulo = responsable
-    ? `Responsable del escaneo: ${responsable}`
-    : "";
-
-  const sheetResumen = [[titulo]];
-  if (subtitulo) sheetResumen.push([subtitulo]);
-  sheetResumen.push([]);
-  sheetResumen.push(["Resumen por trabajadora:"]);
-
-  Object.entries(resumenPorTrabajadora).forEach(([nombre, tipos]) => {
-    const detalles = Object.entries(tipos)
-      .map(
-        ([tipo, cantidad]) =>
-          `${cantidad} palet${cantidad > 1 ? "s" : ""} de ${tipo}`
-      )
-      .join(", ");
-    sheetResumen.push([`${nombre}:`, detalles]);
-  });
-
-  sheetResumen.push([]);
-  sheetResumen.push(["Resumen por tipo de palet (y perchas estimadas):"]);
-
-  let totalPerchas = 0;
-  Object.entries(resumenPorTipo).forEach(([tipo, cantidad]) => {
-    const perchas = cantidad * 20 * (PERCHAS_POR_CAJA[tipo] || 0);
-    totalPerchas += perchas;
-    sheetResumen.push([
-      `Total palets de ${tipo}:`,
-      cantidad,
-      `Total perchas de ${tipo}:`,
-      perchas,
-    ]);
-  });
-
-  sheetResumen.push([]);
-  sheetResumen.push(["Total palets registrados:", registros.length]);
-  sheetResumen.push(["Total perchas estimadas:", totalPerchas]);
-
-  const wsResumen = XLSX.utils.aoa_to_sheet(sheetResumen);
-  wsResumen["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }];
-  wsResumen["!cols"] = [{ wch: 36 }, { wch: 24 }, { wch: 36 }, { wch: 24 }];
-  XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
-
-  // ---- Hoja 2: Detalle
-  const headers = [
-    "Fecha",
-    "Hora",
-    "Código",
-    "Trabajadora",
-    "Tipo",
-    "Turno",
-    "Responsable",
-  ];
-
-  const rows = registros
-    .slice()
-    .sort(
-      (a, b) =>
-        new Date(a.timestamp || a.createdAt || 0) -
-        new Date(b.timestamp || b.createdAt || 0)
-    )
-    .map((r) => [
-      toHumanDate(r.timestamp || r.createdAt),
-      toHumanTime(r.timestamp || r.createdAt),
-      r.codigo || "",
-      r.trabajadora || "—",
-      r.tipo || "—",
-      r.turno || "",
-      r.responsableEscaneo || "",
-    ]);
-
-  const wsDetalle = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  wsDetalle["!cols"] = [
-    { wch: 12 },
-    { wch: 8 },
-    { wch: 14 },
-    { wch: 18 },
-    { wch: 10 },
-    { wch: 14 },
-    { wch: 18 },
-  ];
-  XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle");
-
-  return wb;
-}
-
-/* =========================
- *  Componente
- * ========================= */
 export default function SupervisorMovimientos({ onLogout }) {
   const [tab, setTab] = useState("movimientos"); // "movimientos" | "escaneos"
 
-  /* ========== MOVIMIENTOS ========== */
+  /* =========================
+   *       MOVIMIENTOS
+   * ========================= */
   const [movFrom, setMovFrom] = useState(fmtDateISO());
   const [movTo, setMovTo] = useState(fmtDateISO());
   const [movimientos, setMovimientos] = useState([]);
   const [loadingMov, setLoadingMov] = useState(false);
-  const [opBusyId, setOpBusyId] = useState(null);
+  const [opBusyId, setOpBusyId] = useState(null); // deshabilitar acciones por fila
+
+  // Filtro por tipo para la vista
+  const [tipoFiltro, setTipoFiltro] = useState(""); // "" | "descarga" | "carga" | "carga-mixta"
+  // Qué exportar
+  const [exportKind, setExportKind] = useState("todo"); // "todo" | "descarga" | "carga" | "carga-mixta"
 
   const cargarMovimientos = async () => {
     setLoadingMov(true);
@@ -198,56 +58,136 @@ export default function SupervisorMovimientos({ onLogout }) {
     }
   };
 
-  const columnasMov = useMemo(() => {
-    const keys = new Set();
-    (movimientos || []).forEach((r) =>
-      Object.keys(r || {}).forEach((k) => k !== "__v" && keys.add(k))
-    );
-    const prefer = [
-      "_id",
-      "fecha",
-      "createdAt",
-      "timestamp",
-      "codigo",
-      "turno",
-      "operacion",
-      "matricula",
-      "estado",
-      "descargaFinal",
-      "cerrada",
-    ];
-    const tail = [...keys].filter((k) => !prefer.includes(k));
-    return [...prefer.filter((k) => keys.has(k)), ...tail];
-  }, [movimientos]);
+  // ===== Vista: solo columnas útiles y legibles
+  // Para DESCARGA usaremos "timestamp" como hora de llegada.
+  // Para CARGA / MIXTA usaremos "timestampLlegada".
+  const movimientosFiltrados = useMemo(() => {
+    const base = Array.isArray(movimientos) ? movimientos : [];
+    return tipoFiltro ? base.filter((m) => m?.tipo === tipoFiltro) : base;
+  }, [movimientos, tipoFiltro]);
 
+  // Mapeo a objeto plano de visualización
+  const filasVista = useMemo(() => {
+    return movimientosFiltrados.map((m) => {
+      const llegadaISO =
+        m?.tipo === "descarga" ? m?.timestamp : m?.timestampLlegada;
+
+      return {
+        // Orden recomendado para la tabla
+        fecha: m?.fecha || toHumanDate(llegadaISO),
+        "hora (humana)": toHumanTime(llegadaISO),
+        tipo: m?.tipo || "",
+        personal: m?.personal || "",
+        empresaTransportista: m?.empresaTransportista || "",
+        destino: m?.destino || "",
+        origen: m?.origen || "",
+        numeroContenedor: m?.numeroContenedor || "",
+        numeroPrecinto: m?.numeroPrecinto || "",
+        remolque: m?.remolque || "",
+        tractora: m?.tractora || "",
+        tipoPalet: m?.tipoPalet || "",
+        numeroPalets: typeof m?.numeroPalets === "number" ? m.numeroPalets : "",
+        // ocultamos: _id, createdAt, timestamp, registradaPor, items, updatedAt, timestampSalida...
+      };
+    });
+  }, [movimientosFiltrados]);
+
+  const columnasMov = useMemo(() => {
+    // orden fijo de columnas visibles
+    const order = [
+      "fecha",
+      "hora (humana)",
+      "tipo",
+      "personal",
+      "empresaTransportista",
+      "destino",
+      "origen",
+      "numeroContenedor",
+      "numeroPrecinto",
+      "remolque",
+      "tractora",
+      "tipoPalet",
+      "numeroPalets",
+    ];
+    // solo las que existan en alguna fila y con valores
+    const present = new Set();
+    filasVista.forEach((r) =>
+      order.forEach((k) => {
+        if (r[k] !== undefined) present.add(k);
+      })
+    );
+    return order.filter((k) => present.has(k));
+  }, [filasVista]);
+
+  // ====== Excel de movimientos
   const exportMovimientosExcel = () => {
     if (!movimientos.length) return;
-    const rows = movimientos.map((row) => {
-      const o = {};
-      columnasMov.forEach((k) => {
-        const v = row[k];
-        o[k] =
-          typeof v === "object" && v !== null
-            ? JSON.stringify(v)
-            : String(v ?? "");
+
+    const makeSheet = (lista, nombreHoja) => {
+      const rows = lista.map((m) => {
+        const llegadaISO =
+          m?.tipo === "descarga" ? m?.timestamp : m?.timestampLlegada;
+        const base = {
+          fecha: m?.fecha || toHumanDate(llegadaISO),
+          "hora (humana)": toHumanTime(llegadaISO),
+          tipo: m?.tipo || "",
+          personal: m?.personal || "",
+          empresaTransportista: m?.empresaTransportista || "",
+          destino: m?.destino || "",
+          origen: m?.origen || "",
+          numeroContenedor: m?.numeroContenedor || "",
+          numeroPrecinto: m?.numeroPrecinto || "",
+          remolque: m?.remolque || "",
+          tractora: m?.tractora || "",
+          tipoPalet: m?.tipoPalet || "",
+          numeroPalets:
+            typeof m?.numeroPalets === "number" ? m.numeroPalets : "",
+        };
+        // limpiar claves vacías para no ensanchar columnas innecesarias
+        Object.keys(base).forEach(
+          (k) => (base[k] === "" || base[k] === undefined) && delete base[k]
+        );
+        return base;
       });
-      if (row.timestamp) {
-        o["Fecha (humana)"] = toHumanDate(row.timestamp);
-        o["Hora (humana)"] = toHumanTime(row.timestamp);
-      }
-      return o;
-    });
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const headers = Object.keys(rows[0] || {});
+      ws["!cols"] = headers.map((h) => {
+        const maxLen = Math.max(
+          h.length,
+          ...rows.map((r) => (r[h] ? String(r[h]).length : 0))
+        );
+        return { wch: Math.min(Math.max(maxLen + 2, 12), 60) };
+      });
+      return { ws, nombreHoja };
+    };
+
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const headers = Object.keys(rows[0] || {});
-    ws["!cols"] = headers.map((h) => {
-      const maxLen = Math.max(
-        h.length,
-        ...rows.map((r) => (r[h] ? String(r[h]).length : 0))
+
+    const dsc = movimientos.filter((m) => m?.tipo === "descarga");
+    const crg = movimientos.filter((m) => m?.tipo === "carga");
+    const mix = movimientos.filter((m) => m?.tipo === "carga-mixta");
+
+    if (exportKind === "todo") {
+      const hojas = [
+        makeSheet(dsc, "Descargas"),
+        makeSheet(crg, "Cargas"),
+        makeSheet(mix, "CargasMixtas"),
+      ];
+      hojas.forEach(({ ws, nombreHoja }) =>
+        XLSX.utils.book_append_sheet(wb, ws, nombreHoja)
       );
-      return { wch: Math.min(Math.max(maxLen + 2, 12), 60) };
-    });
-    XLSX.utils.book_append_sheet(wb, ws, "Movimientos");
+    } else if (exportKind === "descarga") {
+      const { ws } = makeSheet(dsc, "Descargas");
+      XLSX.utils.book_append_sheet(wb, ws, "Descargas");
+    } else if (exportKind === "carga") {
+      const { ws } = makeSheet(crg, "Cargas");
+      XLSX.utils.book_append_sheet(wb, ws, "Cargas");
+    } else if (exportKind === "carga-mixta") {
+      const { ws } = makeSheet(mix, "CargasMixtas");
+      XLSX.utils.book_append_sheet(wb, ws, "CargasMixtas");
+    }
+
     XLSX.writeFile(wb, `movimientos_${movFrom}_a_${movTo}.xlsx`);
   };
 
@@ -273,7 +213,9 @@ export default function SupervisorMovimientos({ onLogout }) {
     if (tab === "movimientos") cargarMovimientos();
   }, [tab]);
 
-  /* ========== ESCANEOS ========== */
+  /* =========================
+   *        ESCANEOS
+   * ========================= */
   const [from, setFrom] = useState(fmtDateISO());
   const [to, setTo] = useState(fmtDateISO());
   const [turno, setTurno] = useState("");
@@ -300,46 +242,53 @@ export default function SupervisorMovimientos({ onLogout }) {
     }
   };
 
-  // 🔎 Columnas SIMPLES para personas (sin _id ni campos técnicos)
-  const columnasEscaneos = [
-    {
-      key: "fecha",
-      label: "Fecha",
-      render: (row) => toHumanDate(row.timestamp || row.createdAt),
-    },
-    {
-      key: "hora",
-      label: "Hora",
-      render: (row) => toHumanTime(row.timestamp || row.createdAt),
-    },
-    { key: "codigo", label: "Código QR", render: (row) => row.codigo || "" },
-    { key: "turno", label: "Turno", render: (row) => cap(row.turno || "") },
-    {
-      key: "registradaPor",
-      label: "Registrado por",
-      render: (row) => row.registradaPor || "",
-    },
-    {
-      key: "responsableEscaneo",
-      label: "Responsable escaneo",
-      render: (row) => row.responsableEscaneo || "",
-    },
-    {
-      key: "trabajadora",
-      label: "Trabajadora",
-      render: (row) => row.trabajadora || "—",
-    },
-    { key: "tipo", label: "Tipo de palet", render: (row) => row.tipo || "—" },
-  ];
+  const columnasEscaneos = useMemo(() => {
+    const set = new Set();
+    escaneos.forEach((row) =>
+      Object.keys(row || {}).forEach((k) => k !== "__v" && set.add(k))
+    );
+    const prefer = [
+      "fecha",
+      "timestamp",
+      "codigo",
+      "turno",
+      "responsableEscaneo",
+      "origen",
+      "_id",
+      "createdAt",
+    ];
+    const tail = [...set].filter((k) => !prefer.includes(k));
+    return [...prefer.filter((k) => set.has(k)), ...tail];
+  }, [escaneos]);
 
-  // Excel con el mismo formato (Resumen + Detalle) que Almacén
   const exportEscaneosExcel = () => {
     if (!escaneos.length) return;
-    const wb = buildWorkbookEscaneos({
-      registros: escaneos,
-      turno,
-      responsable: "Supervisor",
+    const rows = escaneos.map((row) => {
+      const o = {};
+      columnasEscaneos.forEach((k) => {
+        const v = row[k];
+        o[k] =
+          typeof v === "object" && v !== null
+            ? JSON.stringify(v)
+            : String(v ?? "");
+      });
+      if (row.timestamp) {
+        o["Fecha (humana)"] = toHumanDate(row.timestamp);
+        o["Hora (humana)"] = toHumanTime(row.timestamp);
+      }
+      return o;
     });
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const headers = Object.keys(rows[0] || {});
+    ws["!cols"] = headers.map((h) => {
+      const maxLen = Math.max(
+        h.length,
+        ...rows.map((r) => (r[h] ? String(r[h]).length : 0))
+      );
+      return { wch: Math.min(Math.max(maxLen + 2, 12), 60) };
+    });
+    XLSX.utils.book_append_sheet(wb, ws, "Escaneos");
     XLSX.writeFile(wb, `escaneos_almacen_${from}_a_${to}.xlsx`);
   };
 
@@ -347,12 +296,9 @@ export default function SupervisorMovimientos({ onLogout }) {
     if (tab === "escaneos") cargarEscaneos();
   }, [tab]);
 
-  /* =========================
-   *  UI
-   * ========================= */
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-      {/* Header */}
+      {/* Header con Cerrar sesión */}
       <div className="mb-4 rounded-2xl border border-emerald-200 bg-white p-3 flex items-center gap-3">
         <h2 className="text-emerald-900 font-semibold">Panel del Supervisor</h2>
         <div className="ml-auto">
@@ -389,10 +335,10 @@ export default function SupervisorMovimientos({ onLogout }) {
         </button>
       </div>
 
-      {/* ====== Movimientos ====== */}
+      {/* ====== Pestaña MOVIMIENTOS ====== */}
       {tab === "movimientos" && (
         <div className="bg-white rounded-2xl border border-emerald-200 p-4 shadow-sm">
-          <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-7 gap-2">
             <div className="flex flex-col">
               <label className="text-xs text-emerald-700/80 mb-1">Desde</label>
               <input
@@ -411,6 +357,39 @@ export default function SupervisorMovimientos({ onLogout }) {
                 className="px-2 py-1.5 border rounded"
               />
             </div>
+
+            {/* Filtro de tipo para la VISTA */}
+            <div className="flex flex-col">
+              <label className="text-xs text-emerald-700/80 mb-1">Tipo</label>
+              <select
+                value={tipoFiltro}
+                onChange={(e) => setTipoFiltro(e.target.value)}
+                className="px-2 py-1.5 border rounded"
+              >
+                <option value="">Todos</option>
+                <option value="descarga">Descargas</option>
+                <option value="carga">Cargas</option>
+                <option value="carga-mixta">Cargas mixtas</option>
+              </select>
+            </div>
+
+            {/* Qué exportar al Excel */}
+            <div className="flex flex-col">
+              <label className="text-xs text-emerald-700/80 mb-1">
+                Exportar
+              </label>
+              <select
+                value={exportKind}
+                onChange={(e) => setExportKind(e.target.value)}
+                className="px-2 py-1.5 border rounded"
+              >
+                <option value="todo">Todo (3 pestañas)</option>
+                <option value="descarga">Solo Descargas</option>
+                <option value="carga">Solo Cargas</option>
+                <option value="carga-mixta">Solo Cargas Mixtas</option>
+              </select>
+            </div>
+
             <div className="flex items-end gap-2 sm:col-span-3">
               <button
                 onClick={cargarMovimientos}
@@ -426,7 +405,7 @@ export default function SupervisorMovimientos({ onLogout }) {
                 Exportar Excel
               </button>
               <div className="ml-auto text-sm text-emerald-800">
-                Total: <b>{movimientos.length}</b>
+                Total: <b>{movimientosFiltrados.length}</b>
               </div>
             </div>
           </div>
@@ -444,41 +423,42 @@ export default function SupervisorMovimientos({ onLogout }) {
                 </tr>
               </thead>
               <tbody>
-                {movimientos.map((row) => (
-                  <tr
-                    key={row._id}
-                    className="odd:bg-white even:bg-emerald-50/40"
-                  >
-                    {columnasMov.map((c) => (
-                      <td key={c} className="px-2 py-1 border-b align-top">
-                        {typeof row[c] === "object" && row[c] !== null
-                          ? JSON.stringify(row[c])
-                          : String(row[c] ?? "")}
+                {filasVista.map((row, idx) => {
+                  const original = movimientosFiltrados[idx]; // para acciones
+                  return (
+                    <tr
+                      key={original?._id || idx}
+                      className="odd:bg-white even:bg-emerald-50/40"
+                    >
+                      {columnasMov.map((c) => (
+                        <td key={c} className="px-2 py-1 border-b align-top">
+                          {String(row[c] ?? "")}
+                        </td>
+                      ))}
+                      <td className="px-2 py-1 border-b">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => patchFila(original?._id, "descarga")}
+                            disabled={opBusyId === original?._id}
+                            className="px-2 py-1 rounded bg-amber-600 text-white text-xs disabled:opacity-50"
+                            title="Marcar descarga final"
+                          >
+                            Descarga final
+                          </button>
+                          <button
+                            onClick={() => patchFila(original?._id, "cerrar")}
+                            disabled={opBusyId === original?._id}
+                            className="px-2 py-1 rounded bg-sky-700 text-white text-xs disabled:opacity-50"
+                            title="Cerrar carga"
+                          >
+                            Cerrar carga
+                          </button>
+                        </div>
                       </td>
-                    ))}
-                    <td className="px-2 py-1 border-b">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => patchFila(row._id, "descarga")}
-                          disabled={opBusyId === row._id}
-                          className="px-2 py-1 rounded bg-amber-600 text-white text-xs disabled:opacity-50"
-                          title="Marcar descarga final"
-                        >
-                          Descarga final
-                        </button>
-                        <button
-                          onClick={() => patchFila(row._id, "cerrar")}
-                          disabled={opBusyId === row._id}
-                          className="px-2 py-1 rounded bg-sky-700 text-white text-xs disabled:opacity-50"
-                          title="Cerrar carga"
-                        >
-                          Cerrar carga
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {!movimientos.length && (
+                    </tr>
+                  );
+                })}
+                {!filasVista.length && (
                   <tr>
                     <td
                       className="px-2 py-3 text-center text-emerald-700"
@@ -494,7 +474,7 @@ export default function SupervisorMovimientos({ onLogout }) {
         </div>
       )}
 
-      {/* ====== Escaneos (tabla simplificada) ====== */}
+      {/* ====== Pestaña ESCANEOS ====== */}
       {tab === "escaneos" && (
         <div className="bg-white rounded-2xl border border-emerald-200 p-4 shadow-sm">
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
@@ -556,8 +536,8 @@ export default function SupervisorMovimientos({ onLogout }) {
               <thead className="bg-emerald-50">
                 <tr>
                   {columnasEscaneos.map((c) => (
-                    <th key={c.key} className="px-2 py-2 text-left border-b">
-                      {c.label}
+                    <th key={c} className="px-2 py-2 text-left border-b">
+                      {c}
                     </th>
                   ))}
                 </tr>
@@ -569,8 +549,10 @@ export default function SupervisorMovimientos({ onLogout }) {
                     className="odd:bg-white even:bg-emerald-50/40"
                   >
                     {columnasEscaneos.map((c) => (
-                      <td key={c.key} className="px-2 py-1 border-b align-top">
-                        {c.render(row)}
+                      <td key={c} className="px-2 py-1 border-b align-top">
+                        {typeof row[c] === "object" && row[c] !== null
+                          ? JSON.stringify(row[c])
+                          : String(row[c] ?? "")}
                       </td>
                     ))}
                   </tr>
