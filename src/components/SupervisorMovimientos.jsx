@@ -12,14 +12,14 @@ const fmtDateISO = (dtv = hoyMadrid()) => dtv.toISODate(); // YYYY-MM-DD
 const toHumanDate = (iso) => (dt(iso) ? dt(iso).toFormat("yyyy-MM-dd") : "");
 const toHumanTime = (iso) => (dt(iso) ? dt(iso).toFormat("HH:mm") : "");
 
-// Normalizador robusto para el campo "tipo"
+// Normalizador robusto para "tipo"
 const normalizeTipo = (s) =>
   (s ?? "")
     .toString()
     .trim()
-    .replace(/([a-z])([A-Z])/g, "$1-$2") // camelCase -> kebab
+    .replace(/([a-z])([A-Z])/g, "$1-$2")
     .toLowerCase()
-    .replace(/[_\s]+/g, "-"); // espacios/guiones bajos -> guion
+    .replace(/[_\s]+/g, "-");
 
 // API helper
 const api = (path, opts = {}) => {
@@ -34,6 +34,14 @@ const api = (path, opts = {}) => {
   });
 };
 
+// Fallback común de nº palets: numeroPalets | totalPalets | palets
+const getNumeroPalets = (m) => {
+  if (typeof m?.numeroPalets === "number") return m.numeroPalets;
+  if (typeof m?.totalPalets === "number") return m.totalPalets; // cargas mixtas
+  if (typeof m?.palets === "number") return m.palets; // descargas (paso 2)
+  return "";
+};
+
 export default function SupervisorMovimientos({ onLogout }) {
   const [tab, setTab] = useState("movimientos"); // "movimientos" | "escaneos"
 
@@ -45,9 +53,8 @@ export default function SupervisorMovimientos({ onLogout }) {
   const [movimientos, setMovimientos] = useState([]);
   const [loadingMov, setLoadingMov] = useState(false);
 
-  // Filtro por tipo para la vista
+  // Filtro por tipo para la VISTA y exportación
   const [tipoFiltro, setTipoFiltro] = useState(""); // "" | "descarga" | "carga" | "carga-mixta"
-  // Qué exportar
   const [exportKind, setExportKind] = useState("todo"); // "todo" | "descarga" | "carga" | "carga-mixta"
 
   const cargarMovimientos = async () => {
@@ -94,7 +101,8 @@ export default function SupervisorMovimientos({ onLogout }) {
         remolque: m?.remolque || "",
         tractora: m?.tractora || "",
         tipoPalet: m?.tipoPalet || "",
-        numeroPalets: typeof m?.numeroPalets === "number" ? m.numeroPalets : "",
+        numeroPalets: getNumeroPalets(m), // 👈 ahora lee también descargas y mixtas
+        numeroCajas: typeof m?.numeroCajas === "number" ? m.numeroCajas : "", // 👈 descargas (paso 2)
       };
     });
   }, [movimientosFiltrados]);
@@ -114,6 +122,7 @@ export default function SupervisorMovimientos({ onLogout }) {
       "tractora",
       "tipoPalet",
       "numeroPalets",
+      "numeroCajas", // aparecerá sólo si existe en alguna fila
     ];
     const present = new Set();
     filasVista.forEach((r) =>
@@ -124,7 +133,7 @@ export default function SupervisorMovimientos({ onLogout }) {
     return order.filter((k) => present.has(k));
   }, [filasVista]);
 
-  // ====== Excel de movimientos
+  // ====== Excel de movimientos (con nº palets y nº cajas en descargas)
   const exportMovimientosExcel = () => {
     if (!movimientos.length) return;
 
@@ -145,9 +154,10 @@ export default function SupervisorMovimientos({ onLogout }) {
           remolque: m?.remolque || "",
           tractora: m?.tractora || "",
           tipoPalet: m?.tipoPalet || "",
-          numeroPalets:
-            typeof m?.numeroPalets === "number" ? m.numeroPalets : "",
+          numeroPalets: getNumeroPalets(m), // 👈 unified
+          numeroCajas: typeof m?.numeroCajas === "number" ? m.numeroCajas : "", // 👈 descargas
         };
+        // limpia claves vacías
         Object.keys(base).forEach(
           (k) => (base[k] === "" || base[k] === undefined) && delete base[k]
         );
@@ -291,7 +301,7 @@ export default function SupervisorMovimientos({ onLogout }) {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-      {/* Header con Cerrar sesión */}
+      {/* Header */}
       <div className="mb-4 rounded-2xl border border-emerald-200 bg-white p-3 flex items-center gap-3">
         <h2 className="text-emerald-900 font-semibold">Panel del Supervisor</h2>
         <div className="ml-auto">
