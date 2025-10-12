@@ -286,6 +286,37 @@ export default function SupervisorMovimientos({ onLogout }) {
     [escaneos]
   );
 
+  // === RESUMEN de palets por tipo (para el box inferior)
+  const tiposOrden = [
+    "46x28",
+    "40x28",
+    "46x11",
+    "40x11",
+    "38x11",
+    "32x11",
+    "26x11",
+  ];
+
+  const resumenTipos = useMemo(() => {
+    const counts = {};
+    (Array.isArray(escaneos) ? escaneos : []).forEach((r) => {
+      const t = r?.tipo || "—";
+      counts[t] = (counts[t] || 0) + 1;
+    });
+    return counts;
+  }, [escaneos]);
+
+  const resumenLista = useMemo(() => {
+    const orderedKnown = tiposOrden.filter((t) => resumenTipos[t]);
+    const others = Object.keys(resumenTipos)
+      .filter((t) => !tiposOrden.includes(t) && resumenTipos[t])
+      .sort();
+    return [...orderedKnown, ...others].map((tipo) => ({
+      tipo,
+      cantidad: resumenTipos[tipo],
+    }));
+  }, [resumenTipos]);
+
   // ===== Excel de escaneos con estructura de Almacén (Resumen + Detalle)
   const exportEscaneosExcel = () => {
     if (!escaneos.length) return;
@@ -395,7 +426,7 @@ export default function SupervisorMovimientos({ onLogout }) {
         const d = r.timestamp
           ? DateTime.fromISO(r.timestamp).setZone(ZONA)
           : null;
-        const fecha = d ? d.toISODate() : ahora.toISODate();
+        const fecha = d ? d.toISODate() : hoyMadrid().toISODate();
         const hora = d ? d.toFormat("HH:mm") : "";
         return [
           fecha,
@@ -420,7 +451,7 @@ export default function SupervisorMovimientos({ onLogout }) {
     ];
     XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle");
 
-    const fechaArchivo = ahora.toISODate(); // YYYY-MM-DD
+    const fechaArchivo = hoyMadrid().toISODate(); // YYYY-MM-DD
     XLSX.writeFile(wb, `escaneos_${fechaArchivo}_${turno || "todos"}.xlsx`);
   };
 
@@ -675,6 +706,32 @@ export default function SupervisorMovimientos({ onLogout }) {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* === Resumen de palets por tipo */}
+          <div className="mt-4 rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-3 mb-2">
+              <h3 className="text-emerald-900 font-semibold">
+                Palets por tipo (rango aplicado)
+              </h3>
+              <div className="ml-auto text-sm text-emerald-800">
+                Total: <b>{escaneos.length}</b>
+              </div>
+            </div>
+            {resumenLista.length ? (
+              <div className="flex flex-wrap gap-2">
+                {resumenLista.map(({ tipo, cantidad }) => (
+                  <div
+                    key={tipo}
+                    className="px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm"
+                  >
+                    {tipo}: <b>{cantidad}</b>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-emerald-700">Sin datos en el rango.</div>
+            )}
           </div>
         </div>
       )}
